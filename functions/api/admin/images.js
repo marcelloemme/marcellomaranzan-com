@@ -8,7 +8,8 @@ export async function onRequestGet(context) {
 
     const images = results.map(img => ({
         ...img,
-        src: `/images/${img.r2_key}`
+        src: `/images/${img.r2_key}`,
+        src_half: `/images/${img.r2_key.replace('.jpg', '_half.jpg')}`
     }));
 
     return Response.json({ images });
@@ -20,6 +21,7 @@ export async function onRequestPost(context) {
 
     const formData = await context.request.formData();
     const file = formData.get('image');
+    const fileHalf = formData.get('image_half');
     const width = parseInt(formData.get('width'));
     const height = parseInt(formData.get('height'));
     const filename = formData.get('filename') || 'image.jpg';
@@ -32,13 +34,21 @@ export async function onRequestPost(context) {
         return Response.json({ error: 'Width and height required' }, { status: 400 });
     }
 
-    // Generate R2 key
+    // Generate R2 keys
     const key = crypto.randomUUID() + '.jpg';
+    const halfKey = key.replace('.jpg', '_half.jpg');
 
-    // Store in R2
+    // Store full in R2
     await R2_BUCKET.put(key, file.stream(), {
         httpMetadata: { contentType: 'image/jpeg' }
     });
+
+    // Store half in R2 (if provided)
+    if (fileHalf) {
+        await R2_BUCKET.put(halfKey, fileHalf.stream(), {
+            httpMetadata: { contentType: 'image/jpeg' }
+        });
+    }
 
     // Record in D1
     const id = crypto.randomUUID().replace(/-/g, '').slice(0, 16);

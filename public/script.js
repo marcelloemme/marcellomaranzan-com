@@ -3,7 +3,7 @@
 
     const viewport = document.getElementById('viewport');
     const slideshow = document.getElementById('slideshow');
-    let slides = []; // populated after fetch
+    let slides = [];
     let currentIndex = 0;
 
     // ===== LAYOUT CALCULATION =====
@@ -36,6 +36,145 @@
 
     window.addEventListener('resize', updateLayout);
 
+    // ===== PROGRESSIVE IMAGE LOADING =====
+
+    // State per <img>: 'none' | 'half' | 'full'
+    const imgState = new Map();
+    let loadQueue = [];
+    let isProcessing = false;
+    let queueGeneration = 0;
+    const PREFETCH_RANGE = 20;
+
+    function getState(img) {
+        return imgState.get(img) || 'none';
+    }
+
+    /**
+     * Build the loading queue centered on centerIndex.
+     * Priority:
+     *   1. Current slide: half then full
+     *   2. Half of ±1, ±2, ... ±PREFETCH_RANGE
+     *   3. Full of ±1, ±2, ... ±PREFETCH_RANGE
+     */
+    function buildQueue(centerIndex) {
+        loadQueue = [];
+        const n = slides.length;
+
+        // Helper: get slide indices at distance d (wrapping)
+        function atDistance(d) {
+            const result = [];
+            if (d === 0) {
+                result.push(centerIndex);
+            } else {
+                const fwd = (centerIndex + d) % n;
+                const bwd = (centerIndex - d + n) % n;
+                result.push(fwd);
+                if (fwd !== bwd) result.push(bwd);
+            }
+            return result;
+        }
+
+        // Collect imgs for a slide index, filtered by what still needs loading
+        function imgsForSlide(i) {
+            return [...slides[i].querySelectorAll('img[data-src-full]')];
+        }
+
+        // 1. Current slide: half → full
+        for (const img of imgsForSlide(centerIndex)) {
+            const st = getState(img);
+            if (st === 'none') loadQueue.push({ img, res: 'half' });
+            if (st !== 'full') loadQueue.push({ img, res: 'full' });
+        }
+
+        // 2. All halfs, expanding outward
+        for (let d = 1; d <= Math.min(PREFETCH_RANGE, Math.floor(n / 2)); d++) {
+            for (const i of atDistance(d)) {
+                for (const img of imgsForSlide(i)) {
+                    if (getState(img) === 'none') {
+                        loadQueue.push({ img, res: 'half' });
+                    }
+                }
+            }
+        }
+
+        // 3. All fulls, expanding outward
+        for (let d = 1; d <= Math.min(PREFETCH_RANGE, Math.floor(n / 2)); d++) {
+            for (const i of atDistance(d)) {
+                for (const img of imgsForSlide(i)) {
+                    if (getState(img) !== 'full') {
+                        loadQueue.push({ img, res: 'full' });
+                    }
+                }
+            }
+        }
+    }
+
+    function processQueue() {
+        if (isProcessing || loadQueue.length === 0) return;
+
+        isProcessing = true;
+        const gen = queueGeneration;
+
+        // Find next actionable task
+        let task;
+        while (loadQueue.length > 0) {
+            task = loadQueue.shift();
+            const st = getState(task.img);
+            // Skip if already done
+            if (task.res === 'half' && st !== 'none') { task = null; continue; }
+            if (task.res === 'full' && st === 'full') { task = null; continue; }
+            break;
+        }
+
+        if (!task) {
+            isProcessing = false;
+            return;
+        }
+
+        const url = task.res === 'half'
+            ? task.img.dataset.srcHalf
+            : task.img.dataset.srcFull;
+
+        if (!url) {
+            isProcessing = false;
+            processQueue();
+            return;
+        }
+
+        const loader = new Image();
+
+        loader.onload = () => {
+            if (gen !== queueGeneration) { isProcessing = false; return; }
+
+            // Don't downgrade: if full already loaded, skip half
+            if (task.res === 'half' && getState(task.img) === 'full') {
+                isProcessing = false;
+                processQueue();
+                return;
+            }
+
+            task.img.src = url;
+            imgState.set(task.img, task.res);
+
+            isProcessing = false;
+            processQueue();
+        };
+
+        loader.onerror = () => {
+            if (gen !== queueGeneration) { isProcessing = false; return; }
+
+            // Half 404 (legacy image): skip to full
+            if (task.res === 'half') {
+                loadQueue.unshift({ img: task.img, res: 'full' });
+            }
+
+            isProcessing = false;
+            processQueue();
+        };
+
+        loader.src = url;
+    }
+
     // ===== NAVIGATION =====
 
     function goTo(index) {
@@ -45,19 +184,20 @@
         slides[index].classList.add('active');
         currentIndex = index;
 
-        prefetchAdjacent(index);
+        // Rebuild queue from new position
+        queueGeneration++;
+        buildQueue(index);
+        processQueue();
     }
 
     function goNext() {
         if (slides.length <= 1) return;
-        const next = (currentIndex + 1) % slides.length;
-        goTo(next);
+        goTo((currentIndex + 1) % slides.length);
     }
 
     function goPrev() {
         if (slides.length <= 1) return;
-        const prev = (currentIndex - 1 + slides.length) % slides.length;
-        goTo(prev);
+        goTo((currentIndex - 1 + slides.length) % slides.length);
     }
 
     // ===== KEYBOARD =====
@@ -72,30 +212,9 @@
         }
     });
 
-    // ===== PREFETCH =====
-
-    function prefetchAdjacent(index) {
-        if (slides.length <= 1) return;
-        const prev = (index - 1 + slides.length) % slides.length;
-        const next = (index + 1) % slides.length;
-        const toLoad = [...new Set([prev, next])];
-
-        toLoad.forEach(i => {
-            const imgs = slides[i].querySelectorAll('img[src]');
-            imgs.forEach(img => {
-                if (!img.dataset.prefetched) {
-                    const preload = new Image();
-                    preload.src = img.src;
-                    img.dataset.prefetched = '1';
-                }
-            });
-        });
-    }
-
     // ===== BIND CLICK HANDLERS =====
 
     function bindNavigation() {
-        // Duo: left photo = prev, right photo = next
         slideshow.querySelectorAll('.slide--duo').forEach(slide => {
             const leftImg = slide.querySelector('.slide__photo--left img');
             const rightImg = slide.querySelector('.slide__photo--right img');
@@ -103,7 +222,6 @@
             if (rightImg) rightImg.addEventListener('click', goNext);
         });
 
-        // Solo: invisible nav zones
         slideshow.querySelectorAll('.slide--solo .slide__photo--wide').forEach(photoWrap => {
             const prevZone = document.createElement('div');
             prevZone.className = 'nav-zone nav-zone--prev';
@@ -122,28 +240,31 @@
 
     function buildSlideDOM(slideData, index) {
         const el = document.createElement('div');
-        el.className = `slide slide--${slideData.layout}${index === 0 ? ' active' : ''}`;
+        el.className = 'slide slide--' + slideData.layout + (index === 0 ? ' active' : '');
         el.dataset.index = index;
 
         if (slideData.layout === 'duo') {
-            const left = slideData.images.find(img => img.role === 'left');
-            const right = slideData.images.find(img => img.role === 'right');
+            const left = slideData.images.find(function(img) { return img.role === 'left'; });
+            const right = slideData.images.find(function(img) { return img.role === 'right'; });
 
             el.innerHTML =
                 '<div class="slide__photo slide__photo--left">' +
-                    '<img src="' + (left ? left.src : '') + '" alt="">' +
+                    '<img data-src-half="' + (left ? left.src_half || '' : '') + '" ' +
+                         'data-src-full="' + (left ? left.src : '') + '" alt="">' +
                     '<p class="slide__caption">' + (left ? left.caption : '') + '</p>' +
                 '</div>' +
                 '<div class="slide__photo slide__photo--right">' +
-                    '<img src="' + (right ? right.src : '') + '" alt="">' +
+                    '<img data-src-half="' + (right ? right.src_half || '' : '') + '" ' +
+                         'data-src-full="' + (right ? right.src : '') + '" alt="">' +
                     '<p class="slide__caption">' + (right ? right.caption : '') + '</p>' +
                 '</div>';
         } else {
-            const wide = slideData.images.find(img => img.role === 'wide');
+            const wide = slideData.images.find(function(img) { return img.role === 'wide'; });
 
             el.innerHTML =
                 '<div class="slide__photo slide__photo--wide">' +
-                    '<img src="' + (wide ? wide.src : '') + '" alt="">' +
+                    '<img data-src-half="' + (wide ? wide.src_half || '' : '') + '" ' +
+                         'data-src-full="' + (wide ? wide.src : '') + '" alt="">' +
                     '<p class="slide__caption">' + (wide ? wide.caption : '') + '</p>' +
                 '</div>';
         }
@@ -151,7 +272,40 @@
         return el;
     }
 
-    // ===== LOAD AND RENDER =====
+    // ===== LOAD FIRST SLIDE THEN START QUEUE =====
+
+    function loadFirstSlide(callback) {
+        const firstImgs = [...slides[0].querySelectorAll('img[data-src-full]')];
+        if (firstImgs.length === 0) { callback(); return; }
+
+        let loaded = 0;
+        function onDone() {
+            loaded++;
+            if (loaded >= firstImgs.length) callback();
+        }
+
+        firstImgs.forEach(img => {
+            const halfUrl = img.dataset.srcHalf;
+            const fullUrl = img.dataset.srcFull;
+
+            function tryFull() {
+                if (!fullUrl) { onDone(); return; }
+                const fb = new Image();
+                fb.onload = () => { img.src = fullUrl; imgState.set(img, 'full'); onDone(); };
+                fb.onerror = onDone;
+                fb.src = fullUrl;
+            }
+
+            if (!halfUrl) { tryFull(); return; }
+
+            const loader = new Image();
+            loader.onload = () => { img.src = halfUrl; imgState.set(img, 'half'); onDone(); };
+            loader.onerror = tryFull; // half 404 → try full
+            loader.src = halfUrl;
+        });
+    }
+
+    // ===== INIT =====
 
     async function init() {
         try {
@@ -159,47 +313,27 @@
             const data = await res.json();
 
             if (!data.slides || data.slides.length === 0) {
-                // No slides yet — show nothing
                 updateLayout();
                 return;
             }
 
-            // Build DOM
+            // Build DOM (no images loaded yet)
             data.slides.forEach((slideData, i) => {
                 slideshow.appendChild(buildSlideDOM(slideData, i));
             });
 
-            // Collect slide elements
             slides = slideshow.querySelectorAll('.slide');
             currentIndex = 0;
 
-            // Bind click handlers
             bindNavigation();
 
-            // Wait for first slide images to load, then run layout
-            const firstImgs = slides[0].querySelectorAll('img');
-            let loaded = 0;
-            const total = firstImgs.length;
-
-            if (total === 0) {
+            // Load first slide half-res → layout → start full queue
+            loadFirstSlide(() => {
                 updateLayout();
-            } else {
-                const onLoad = () => {
-                    loaded++;
-                    if (loaded >= total) {
-                        updateLayout();
-                        prefetchAdjacent(0);
-                    }
-                };
-                firstImgs.forEach(img => {
-                    if (img.complete) {
-                        onLoad();
-                    } else {
-                        img.addEventListener('load', onLoad);
-                        img.addEventListener('error', onLoad);
-                    }
-                });
-            }
+                buildQueue(0);
+                processQueue();
+            });
+
         } catch (err) {
             console.error('Failed to load slides:', err);
             updateLayout();

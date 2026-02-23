@@ -15,8 +15,12 @@ export async function onRequestDelete(context) {
         return Response.json({ error: 'Image is assigned to a slide. Remove it from the slide first.' }, { status: 409 });
     }
 
-    // Delete from R2
-    await R2_BUCKET.delete(image.r2_key);
+    // Delete full and half variants from R2
+    const halfKey = image.r2_key.replace('.jpg', '_half.jpg');
+    await Promise.all([
+        R2_BUCKET.delete(image.r2_key),
+        R2_BUCKET.delete(halfKey)
+    ]);
 
     // Delete from D1
     await DB.prepare('DELETE FROM images WHERE id = ?').bind(id).run();

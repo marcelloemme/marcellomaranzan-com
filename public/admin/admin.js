@@ -93,7 +93,7 @@
 
             const thumbs = slide.images.map(img => {
                 const cls = img.role === 'wide' ? 'slide-card__thumb slide-card__thumb--wide' : 'slide-card__thumb';
-                return '<img class="' + cls + '" src="' + img.src + '" alt="">';
+                return '<img class="' + cls + '" src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">';
             }).join('');
 
             const captions = slide.images.map(img => img.caption).filter(Boolean).join(' / ');
@@ -290,7 +290,7 @@
             if (!preview) return;
             const img = selectedImages[role];
             if (img) {
-                preview.innerHTML = '<img src="' + img.src + '" alt="">';
+                preview.innerHTML = '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">';
             } else {
                 preview.textContent = 'Click to select';
             }
@@ -340,7 +340,7 @@
                 card.classList.add('selected');
             }
 
-            card.innerHTML = '<img src="' + img.src + '" alt="">';
+            card.innerHTML = '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">';
             card.addEventListener('click', () => {
                 selectedImages[activeSlot] = img;
                 updatePreviews();
@@ -425,7 +425,7 @@
             const card = document.createElement('div');
             card.className = 'image-card';
             card.innerHTML =
-                '<img src="' + img.src + '" alt="">' +
+                '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">' +
                 '<div class="image-card__info">' +
                     '<span class="filename">' + escHtml(img.filename) + '</span>' +
                     img.width + '&times;' + img.height + ' &middot; ' + formatSize(img.size_bytes) +
@@ -509,12 +509,16 @@
     });
 
     async function uploadImage(file) {
-        const { blob, width, height } = await resizeImage(file, 1600, 0.80);
+        const [full, half] = await Promise.all([
+            resizeImage(file, 1600, 0.80),
+            resizeImage(file, 800, 0.80)
+        ]);
 
         const formData = new FormData();
-        formData.append('image', blob, file.name);
-        formData.append('width', width);
-        formData.append('height', height);
+        formData.append('image', full.blob, file.name);
+        formData.append('image_half', half.blob, file.name);
+        formData.append('width', full.width);
+        formData.append('height', full.height);
         formData.append('filename', file.name);
 
         await api('/api/admin/images', { method: 'POST', body: formData });

@@ -34,6 +34,7 @@ export async function onRequestGet(context) {
             slidesMap.get(row.slide_id).images.push({
                 role: row.role,
                 src: `/images/${row.r2_key}`,
+                src_half: `/images/${row.r2_key.replace('.jpg', '_half.jpg')}`,
                 caption: row.caption || '',
                 width: row.width,
                 height: row.height,
