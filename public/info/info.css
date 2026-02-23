@@ -1,0 +1,95 @@
+/* ===== INFO PAGE LAYOUT ===== */
+
+#info-page {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    overflow: hidden;
+}
+
+/* ===== MAIN BODY (left column) ===== */
+
+.info-body {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 0.25rem 0 0 0.5rem;
+    overflow-y: auto;
+}
+
+.info-body__row {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+}
+
+.info-body__prefix {
+    width: 7rem;
+    flex-shrink: 0;
+    text-align: left;
+    padding-right: 2rem;
+}
+
+.info-body__text {
+    flex: 1;
+    max-width: 55em;
+}
+
+.info-body__text em {
+    font-style: italic;
+}
+
+.info-body__text a {
+    text-decoration: underline;
+}
+
+.info-body__text a:hover {
+    text-decoration: none;
+}
+
+/* Spacer between sections (bio→w, w→personal projects, 2023→2022) */
+.info-body__spacer {
+    height: 1lh;
+}
+
+/* ===== INFO SIDEBAR (right column) ===== */
+
+#info-page #info {
+    flex: none;
+    height: auto;
+    padding: 0.25rem var(--gap) 0 0;
+    margin-left: var(--gap);
+}
+
+/* ===== MOBILE (portrait) ===== */
+
+@media (orientation: portrait) {
+
+    #info-page {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .info-body {
+        width: 100%;
+        height: auto;
+        overflow-y: visible;
+        padding: var(--gap);
+    }
+
+    .info-body__prefix {
+        width: 4.5rem;
+        flex-shrink: 0;
+        padding-right: 0.75rem;
+    }
+
+    #info-page #info {
+        width: 100%;
+        margin-left: 0;
+        padding: 0 var(--gap) 4% 0;
+        align-items: flex-end;
+        justify-content: flex-end;
+    }
+}

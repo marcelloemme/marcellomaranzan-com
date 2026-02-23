@@ -1,0 +1,252 @@
+/* ===== RESET & BASE ===== */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --gap: 0.25rem;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: "Helvetica", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 400;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #333;
+    background: #fff;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+img {
+    display: block;
+}
+
+/* ===== LAYOUT SHELL ===== */
+
+#viewport {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+}
+
+#slideshow {
+    flex-shrink: 0;
+    height: 100%;
+    position: relative;
+}
+
+#info {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 0.25rem var(--gap) 0 0;
+    margin-left: var(--gap);
+}
+
+.info__content {
+    display: grid;
+    grid-template-columns: auto auto;
+    row-gap: 0;
+    white-space: nowrap;
+}
+
+.info__content a {
+    display: contents;
+}
+
+.info__prefix {
+    text-align: right;
+}
+
+.info__main {
+    text-align: left;
+}
+
+.ghost {
+    color: transparent;
+    pointer-events: none;
+    user-select: none;
+}
+
+.info__spacer {
+    grid-column: 1 / -1;
+    height: 1lh; /* one line-height */
+}
+
+/* ===== SLIDES ===== */
+.slide {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    align-items: flex-start;
+}
+
+.slide.active {
+    display: flex;
+}
+
+/* ===== DUO LAYOUT (two 3:4 portraits) ===== */
+
+.slide--duo {
+    gap: var(--gap);
+}
+
+/*
+ * Photo height is set by JS as --photo-h on #viewport.
+ * This is calculated as: min(columnWidth * 4/3, viewportHeight * 0.95)
+ * where columnWidth = (availableWidth - gap) / 2
+ * and availableWidth is determined iteratively to account for
+ * the actual space photos+info need.
+ */
+
+.slide--duo .slide__photo {
+    height: var(--photo-h);
+    overflow: visible;
+    flex-shrink: 0;
+}
+
+.slide--duo .slide__photo img {
+    height: 100%;
+    width: auto;
+}
+
+/* ===== SOLO LAYOUT (one 4:3 landscape) ===== */
+
+.slide--solo .slide__photo--wide {
+    height: var(--photo-h);
+    overflow: visible;
+    flex-shrink: 0;
+}
+
+.slide--solo .slide__photo--wide img {
+    height: 100%;
+    width: auto;
+}
+
+/* ===== CAPTIONS ===== */
+.slide__caption {
+    text-align: right;
+    margin-top: var(--gap);
+    color: #666;
+}
+
+/* ===== NAVIGATION ZONES (click areas) ===== */
+
+/* Duo: left photo = prev, right photo = next */
+.slide--duo .slide__photo--left img {
+    cursor: w-resize;
+}
+
+.slide--duo .slide__photo--right img {
+    cursor: e-resize;
+}
+
+/* Solo: left half = prev, right half = next (handled in JS with overlay) */
+.slide--solo .slide__photo--wide {
+    position: relative;
+}
+
+.nav-zone {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 50%;
+    z-index: 2;
+}
+
+.nav-zone--prev {
+    left: 0;
+    cursor: w-resize;
+}
+
+.nav-zone--next {
+    right: 0;
+    cursor: e-resize;
+}
+
+/* ===== MOBILE (portrait orientation) ===== */
+
+@media (orientation: portrait) {
+
+    #viewport {
+        flex-direction: column;
+    }
+
+    #slideshow {
+        width: 100% !important; /* override JS inline width */
+        height: auto;
+        flex-shrink: 0;
+    }
+
+    #info {
+        flex: 1;
+        width: 100%;
+        margin-left: 0;
+        padding: 0 var(--gap) 4% 0;
+        align-items: flex-end;   /* push content to bottom */
+        justify-content: flex-end; /* push content to right */
+    }
+
+    .slide {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
+
+    /* DUO mobile: full width, no side padding, gap between photos */
+    .slide--duo {
+        gap: var(--gap);
+    }
+
+    .slide--duo .slide__photo {
+        height: auto;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .slide--duo .slide__photo img {
+        width: 100%;
+        height: auto;
+    }
+
+    /* Both captions aligned right; only right photo has 0.25rem padding from edge */
+    .slide--duo .slide__photo--left .slide__caption {
+        text-align: right;
+    }
+
+    .slide--duo .slide__photo--right .slide__caption {
+        padding-right: var(--gap);
+    }
+
+    /* SOLO mobile: full width, no padding */
+    .slide--solo .slide__photo--wide {
+        height: auto;
+        width: 100%;
+    }
+
+    .slide--solo .slide__photo--wide img {
+        width: 100%;
+        height: auto;
+    }
+
+    .slide--solo .slide__caption {
+        padding-right: var(--gap);
+    }
+}

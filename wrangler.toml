@@ -1,0 +1,12 @@
+name = "marcellomaranzan-com"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "marcellomaranzan-db"
+database_id = "2b1d52ea-24e1-4612-924b-110e87bc7fbd"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "marcellomaranzan-images"

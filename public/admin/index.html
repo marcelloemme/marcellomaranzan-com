@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Marcello Maranzan</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <header class="header">
+        <h1>marcellomaranzan.com</h1>
+        <nav class="header__nav">
+            <button class="tab tab--active" data-view="slides">Slides</button>
+            <button class="tab" data-view="library">Library</button>
+        </nav>
+        <a href="/" class="header__link" target="_blank">View site &rarr;</a>
+    </header>
+
+    <!-- SLIDES VIEW -->
+    <section id="view-slides" class="view">
+        <div class="toolbar">
+            <button id="btn-new-slide" class="btn btn--primary">+ New slide</button>
+        </div>
+        <div id="slides-list" class="slides-list"></div>
+    </section>
+
+    <!-- LIBRARY VIEW -->
+    <section id="view-library" class="view" style="display:none;">
+        <div class="toolbar">
+            <button id="btn-upload" class="btn btn--primary">+ Upload images</button>
+            <input type="file" id="file-input" accept="image/*" multiple hidden>
+        </div>
+        <div id="images-grid" class="images-grid"></div>
+    </section>
+
+    <!-- NEW SLIDE MODAL -->
+    <div id="modal-slide" class="modal" style="display:none;">
+        <div class="modal__backdrop"></div>
+        <div class="modal__content">
+            <h2>New slide</h2>
+            <div class="form-group">
+                <label>Layout</label>
+                <div class="layout-picker">
+                    <button class="layout-btn layout-btn--active" data-layout="duo">
+                        <span class="layout-icon">&#9634;&#9634;</span> Duo (2 portraits)
+                    </button>
+                    <button class="layout-btn" data-layout="solo">
+                        <span class="layout-icon">&#9634;</span> Solo (1 landscape)
+                    </button>
+                </div>
+            </div>
+
+            <div id="slot-duo" class="image-slots">
+                <div class="image-slot" data-role="left">
+                    <div class="image-slot__preview" id="preview-left">Click to select image</div>
+                    <input type="text" class="caption-input" data-role="left" placeholder="Caption left">
+                </div>
+                <div class="image-slot" data-role="right">
+                    <div class="image-slot__preview" id="preview-right">Click to select image</div>
+                    <input type="text" class="caption-input" data-role="right" placeholder="Caption right">
+                </div>
+            </div>
+
+            <div id="slot-solo" class="image-slots" style="display:none;">
+                <div class="image-slot" data-role="wide">
+                    <div class="image-slot__preview" id="preview-wide">Click to select image</div>
+                    <input type="text" class="caption-input" data-role="wide" placeholder="Caption">
+                </div>
+            </div>
+
+            <!-- Image picker (shown when clicking a slot) -->
+            <div id="image-picker" class="image-picker" style="display:none;">
+                <h3>Select an image</h3>
+                <div id="picker-grid" class="images-grid images-grid--small"></div>
+            </div>
+
+            <div class="modal__actions">
+                <button id="btn-save-slide" class="btn btn--primary">Save</button>
+                <button id="btn-cancel-slide" class="btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
