@@ -43,7 +43,6 @@
     let loadQueue = [];
     let isProcessing = false;
     let queueGeneration = 0;
-    const PREFETCH_RANGE = 20;
 
     function getState(img) {
         return imgState.get(img) || 'none';
@@ -53,12 +52,23 @@
      * Build the loading queue centered on centerIndex.
      * Priority:
      *   1. Current slide: half then full
-     *   2. Half of ±1, ±2, ... ±PREFETCH_RANGE
-     *   3. Full of ±1, ±2, ... ±PREFETCH_RANGE
+     *   2. Alternating bands — half coverage first, then nearby fulls:
+     *      - half ±1..10, full ±1..3, half ±11..15,
+     *        full ±4..9, half ±16..20, full ±10..20
      */
+    const BANDS = [
+        { res: 'half', from: 1,  to: 10 },
+        { res: 'full', from: 1,  to: 3  },
+        { res: 'half', from: 11, to: 15 },
+        { res: 'full', from: 4,  to: 9  },
+        { res: 'half', from: 16, to: 20 },
+        { res: 'full', from: 10, to: 20 },
+    ];
+
     function buildQueue(centerIndex) {
         loadQueue = [];
         const n = slides.length;
+        const maxD = Math.floor(n / 2);
 
         // Helper: get slide indices at distance d (wrapping)
         function atDistance(d) {
@@ -74,7 +84,7 @@
             return result;
         }
 
-        // Collect imgs for a slide index, filtered by what still needs loading
+        // Collect imgs for a slide index
         function imgsForSlide(i) {
             return [...slides[i].querySelectorAll('img[data-src-full]')];
         }
@@ -86,23 +96,18 @@
             if (st !== 'full') loadQueue.push({ img, res: 'full' });
         }
 
-        // 2. All halfs, expanding outward
-        for (let d = 1; d <= Math.min(PREFETCH_RANGE, Math.floor(n / 2)); d++) {
-            for (const i of atDistance(d)) {
-                for (const img of imgsForSlide(i)) {
-                    if (getState(img) === 'none') {
-                        loadQueue.push({ img, res: 'half' });
-                    }
-                }
-            }
-        }
-
-        // 3. All fulls, expanding outward
-        for (let d = 1; d <= Math.min(PREFETCH_RANGE, Math.floor(n / 2)); d++) {
-            for (const i of atDistance(d)) {
-                for (const img of imgsForSlide(i)) {
-                    if (getState(img) !== 'full') {
-                        loadQueue.push({ img, res: 'full' });
+        // 2. Alternating bands
+        for (const band of BANDS) {
+            const lo = Math.min(band.from, maxD);
+            const hi = Math.min(band.to, maxD);
+            for (let d = lo; d <= hi; d++) {
+                for (const i of atDistance(d)) {
+                    for (const img of imgsForSlide(i)) {
+                        if (band.res === 'half' && getState(img) === 'none') {
+                            loadQueue.push({ img, res: 'half' });
+                        } else if (band.res === 'full' && getState(img) !== 'full') {
+                            loadQueue.push({ img, res: 'full' });
+                        }
                     }
                 }
             }
