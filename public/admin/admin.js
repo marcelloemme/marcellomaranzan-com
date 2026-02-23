@@ -21,6 +21,12 @@
 
     // ===== API =====
     async function api(url, options = {}) {
+        // Bust browser cache on GET requests (API has Cache-Control: max-age=60)
+        const method = (options.method || 'GET').toUpperCase();
+        if (method === 'GET') {
+            const sep = url.includes('?') ? '&' : '?';
+            url += sep + '_t=' + Date.now();
+        }
         const res = await fetch(url, options);
         if (!res.ok) {
             const err = await res.json().catch(() => ({ error: res.statusText }));
