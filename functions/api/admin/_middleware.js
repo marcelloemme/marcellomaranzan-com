@@ -28,14 +28,14 @@ export async function onRequest(context) {
   });
 }
 
-// Verify HMAC token + 14h expiry
+// Verify HMAC token + 4h expiry
 async function verifyToken(token, secret) {
   const parts = token.split('.');
   if (parts.length !== 2) return false;
 
   const [timestamp, hex] = parts;
   const age = Date.now() - parseInt(timestamp);
-  if (isNaN(age) || age > 50400000 || age < 0) return false;
+  if (isNaN(age) || age > 14400000 || age < 0) return false;
 
   const key = await crypto.subtle.importKey(
     'raw',

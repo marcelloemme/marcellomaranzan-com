@@ -2,7 +2,7 @@
  * Auth middleware for /admin/* routes
  *
  * Protects admin panel with username + password.
- * Cookie mm_auth: Max-Age 14h, HttpOnly, Secure.
+ * Cookie mm_auth: Max-Age 4h, HttpOnly, Secure.
  *
  * Environment variables (set as secrets in Cloudflare Pages):
  * - ADMIN_USER: admin username
@@ -38,7 +38,7 @@ export async function onRequest(context) {
         status: 302,
         headers: {
           'Location': '/admin/',
-          'Set-Cookie': `mm_auth=${token}; Max-Age=50400; Path=/; HttpOnly; Secure; SameSite=Lax`,
+          'Set-Cookie': `mm_auth=${token}; Max-Age=14400; Path=/; HttpOnly; Secure; SameSite=Lax`,
         },
       });
     }
@@ -76,14 +76,14 @@ async function generateToken(secret) {
   return `${timestamp}.${hex}`;
 }
 
-// Verify HMAC token + 14h expiry
+// Verify HMAC token + 4h expiry
 async function verifyToken(token, secret) {
   const parts = token.split('.');
   if (parts.length !== 2) return false;
 
   const [timestamp, hex] = parts;
   const age = Date.now() - parseInt(timestamp);
-  if (isNaN(age) || age > 50400000 || age < 0) return false; // 14h in ms
+  if (isNaN(age) || age > 14400000 || age < 0) return false; // 4h in ms
 
   const key = await crypto.subtle.importKey(
     'raw',
