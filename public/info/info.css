@@ -65,6 +65,10 @@
 
 /* ===== MOBILE (portrait) ===== */
 
+@media (orientation: portrait) and (max-width: 430px) {
+    html, body { font-size: 11px; }
+}
+
 @media (orientation: portrait) {
 
     #info-page {

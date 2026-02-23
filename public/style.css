@@ -183,6 +183,10 @@ img {
 
 /* ===== MOBILE (portrait orientation) ===== */
 
+@media (orientation: portrait) and (max-width: 430px) {
+    html, body { font-size: 11px; }
+}
+
 @media (orientation: portrait) {
 
     #viewport {
