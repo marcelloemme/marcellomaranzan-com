@@ -11,9 +11,11 @@ export async function onRequestGet(context) {
             si.r2_key,
             si.caption,
             si.width,
-            si.height
+            si.height,
+            i.id         AS image_id
         FROM slides s
         LEFT JOIN slide_images si ON si.slide_id = s.id
+        LEFT JOIN images i ON i.r2_key = si.r2_key
         ORDER BY s.position ASC, si.role ASC
     `).all();
 
@@ -34,7 +36,8 @@ export async function onRequestGet(context) {
                 src: `/images/${row.r2_key}`,
                 caption: row.caption || '',
                 width: row.width,
-                height: row.height
+                height: row.height,
+                image_id: row.image_id
             });
         }
     }
