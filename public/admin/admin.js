@@ -563,9 +563,39 @@
         });
     }
 
+    // ===== SHUFFLE TOGGLE =====
+    const shuffleLabel = document.createElement('label');
+    shuffleLabel.className = 'shuffle-toggle';
+    shuffleLabel.innerHTML = '<input type="checkbox" id="shuffle-check"> Random slide order';
+    slidesList.parentNode.insertBefore(shuffleLabel, slidesList);
+
+    const shuffleCheck = document.getElementById('shuffle-check');
+
+    shuffleCheck.addEventListener('change', async () => {
+        try {
+            await api('/api/admin/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'shuffle_slides', value: shuffleCheck.checked ? '1' : '0' })
+            });
+            showToast(shuffleCheck.checked ? 'Random order enabled' : 'Random order disabled');
+        } catch (err) {
+            shuffleCheck.checked = !shuffleCheck.checked;
+            showToast('Error: ' + err.message);
+        }
+    });
+
     // ===== INIT =====
     async function init() {
         await Promise.all([loadSlides(), loadLibrary()]);
+
+        // Load shuffle setting
+        try {
+            const settings = await api('/api/admin/settings');
+            shuffleCheck.checked = settings.shuffle_slides === '1';
+        } catch (e) {
+            // settings table may not exist yet
+        }
     }
 
     init();

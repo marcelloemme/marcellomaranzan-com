@@ -310,6 +310,72 @@
         });
     }
 
+    // ===== CONSTRAINED SHUFFLE =====
+
+    /**
+     * Shuffle an array so that no layout repeats 3+ times in a row.
+     * prevLayout is the layout of the fixed first slide (checked against arr[0]).
+     */
+    function constrainedShuffle(arr, prevLayout) {
+        function isValid(a) {
+            let prev = prevLayout;
+            let run = 1;
+            for (let i = 0; i < a.length; i++) {
+                if (a[i].layout === prev) {
+                    run++;
+                    if (run >= 3) return false;
+                } else {
+                    prev = a[i].layout;
+                    run = 1;
+                }
+            }
+            return true;
+        }
+
+        function fisherYates(a) {
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+            }
+            return a;
+        }
+
+        // Try up to 50 random shuffles
+        let result = arr.slice();
+        for (let attempt = 0; attempt < 50; attempt++) {
+            fisherYates(result);
+            if (isValid(result)) return result;
+        }
+
+        // Fallback: fix violations by swapping
+        let prev = prevLayout;
+        let run = 1;
+        for (let i = 0; i < result.length; i++) {
+            if (result[i].layout === prev) {
+                run++;
+                if (run >= 3) {
+                    // Find nearest different-layout slide to swap with
+                    for (let j = i + 1; j < result.length; j++) {
+                        if (result[j].layout !== prev) {
+                            const tmp = result[i]; result[i] = result[j]; result[j] = tmp;
+                            break;
+                        }
+                    }
+                    // Reset run tracking from swap point
+                    if (result[i].layout !== prev) {
+                        prev = result[i].layout;
+                        run = 1;
+                    }
+                }
+            } else {
+                prev = result[i].layout;
+                run = 1;
+            }
+        }
+
+        return result;
+    }
+
     // ===== INIT =====
 
     async function init() {
@@ -320,6 +386,13 @@
             if (!data.slides || data.slides.length === 0) {
                 updateLayout();
                 return;
+            }
+
+            // Shuffle slides if enabled (keep first slide fixed)
+            if (data.shuffle && data.slides.length > 1) {
+                const first = data.slides[0];
+                const rest = constrainedShuffle(data.slides.slice(1), first.layout);
+                data.slides = [first, ...rest];
             }
 
             // Build DOM (no images loaded yet)

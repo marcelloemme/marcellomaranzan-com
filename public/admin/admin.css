@@ -113,6 +113,24 @@ body {
     margin-top: 1.25rem;
 }
 
+/* ===== SHUFFLE TOGGLE ===== */
+.shuffle-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    user-select: none;
+}
+
+.shuffle-toggle input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+}
+
 /* ===== SLIDES LIST ===== */
 .slides-list {
     display: flex;

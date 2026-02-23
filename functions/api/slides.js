@@ -45,7 +45,13 @@ export async function onRequestGet(context) {
 
     const slides = [...slidesMap.values()];
 
-    return Response.json({ slides }, {
+    // Check shuffle setting
+    const shuffleSetting = await DB.prepare(
+        "SELECT value FROM settings WHERE key = 'shuffle_slides'"
+    ).first();
+    const shuffle = shuffleSetting?.value === '1';
+
+    return Response.json({ slides, shuffle }, {
         headers: {
             'Cache-Control': 'public, max-age=60',
         }

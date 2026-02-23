@@ -26,5 +26,10 @@ CREATE TABLE IF NOT EXISTS images (
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_slides_position ON slides(position);
 CREATE INDEX IF NOT EXISTS idx_slide_images_slide ON slide_images(slide_id);
