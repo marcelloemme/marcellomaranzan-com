@@ -7,21 +7,19 @@
     let allLibraryData = [];
     let currentLayout = 'duo';
     let selectedImages = { left: null, right: null, wide: null };
-    let activeSlot = null;
     let editingSlideId = null;
     let selectionMode = false;
     let selectedLibraryIds = new Set();
     let lastClickedIndex = -1;
-    let currentFolderId = null;  // null = root
+    let currentFolderId = null;  // null = root (library view)
     let foldersData = [];
     let breadcrumbData = [];
-    let pickerFolderId = null;  // remembers last folder used in picker
+    let browserFolderId = null;  // remembers folder in browser panel (slides view)
 
     // ===== DOM REFS =====
     const slidesList = document.getElementById('slides-list');
     const imagesGrid = document.getElementById('images-grid');
-    const pickerGrid = document.getElementById('picker-grid');
-    const imagePicker = document.getElementById('image-picker');
+    const browserGrid = document.getElementById('browser-grid');
     const editorTitle = document.getElementById('editor-title');
     const btnSave = document.getElementById('btn-save-slide');
     const btnCancel = document.getElementById('btn-cancel-edit');
@@ -29,7 +27,6 @@
 
     // ===== API =====
     async function api(url, options = {}) {
-        // Bust browser cache on GET requests (API has Cache-Control: max-age=60)
         const method = (options.method || 'GET').toUpperCase();
         if (method === 'GET') {
             const sep = url.includes('?') ? '&' : '?';
@@ -130,7 +127,6 @@
                 e.stopPropagation();
 
                 if (delBtn.dataset.armed) {
-                    // Second click — do the delete
                     delBtn.textContent = '...';
                     delBtn.disabled = true;
                     api('/api/admin/slides/' + slide.id, { method: 'DELETE' })
@@ -146,12 +142,10 @@
                             delBtn.classList.remove('btn-delete-slide--armed');
                         });
                 } else {
-                    // First click — arm the button
                     delBtn.dataset.armed = '1';
                     delBtn.textContent = 'delete?';
                     delBtn.classList.add('btn-delete-slide--armed');
 
-                    // Auto-disarm after 3 seconds
                     setTimeout(() => {
                         if (delBtn.dataset.armed) {
                             delete delBtn.dataset.armed;
@@ -165,7 +159,7 @@
             slidesList.appendChild(card);
         });
 
-        initDragDrop();
+        initSlideDragDrop();
     }
 
     // ===== EDIT SLIDE =====
@@ -192,13 +186,13 @@
 
         updateLayoutPicker();
         updatePreviews();
-        imagePicker.style.display = 'none';
 
         editorTitle.textContent = 'Edit slide #' + (slidesData.indexOf(slide) + 1);
         btnSave.textContent = 'Save changes';
         btnCancel.style.display = '';
 
         renderSlides();
+        renderBrowser(); // refresh "in use" state
     }
 
     function resetEditor() {
@@ -207,7 +201,6 @@
         selectedImages = { left: null, right: null, wide: null };
         updateLayoutPicker();
         updatePreviews();
-        imagePicker.style.display = 'none';
         document.querySelectorAll('.caption-input').forEach(inp => inp.value = '');
 
         editorTitle.textContent = 'New slide';
@@ -215,19 +208,23 @@
         btnCancel.style.display = 'none';
 
         renderSlides();
+        renderBrowser();
     }
 
     btnCancel.addEventListener('click', resetEditor);
 
-    // ===== DRAG AND DROP =====
-    function initDragDrop() {
+    // ===== SLIDE DRAG AND DROP (reorder) =====
+    function initSlideDragDrop() {
         let draggedCard = null;
 
         slidesList.querySelectorAll('.slide-card').forEach(card => {
             card.addEventListener('dragstart', (e) => {
+                // Only allow slide reorder if not dragging from browser
+                if (e.dataTransfer.types.includes('application/x-image-id')) return;
                 draggedCard = card;
                 card.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', 'slide-reorder');
             });
 
             card.addEventListener('dragend', () => {
@@ -237,9 +234,10 @@
             });
 
             card.addEventListener('dragover', (e) => {
+                if (!draggedCard) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-                if (draggedCard && card !== draggedCard) {
+                if (card !== draggedCard) {
                     card.classList.add('drag-over');
                 }
             });
@@ -300,82 +298,125 @@
             if (img) {
                 preview.innerHTML = '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">';
             } else {
-                preview.textContent = 'Click to select';
+                preview.textContent = 'Drop image here';
             }
         });
     }
 
-    // ===== IMAGE SLOT CLICK → PICKER =====
-    document.querySelectorAll('.image-slot__preview').forEach(preview => {
-        preview.addEventListener('click', () => {
+    // ===== DROP ZONES (image slots accept drops) =====
+    function initDropZones() {
+        document.querySelectorAll('.image-slot__preview').forEach(preview => {
             const role = preview.closest('.image-slot').dataset.role;
-            activeSlot = role;
-            showImagePicker();
-        });
-    });
 
-    function showImagePicker() {
-        renderPicker();
-        imagePicker.style.display = '';
+            preview.addEventListener('dragover', (e) => {
+                if (e.dataTransfer.types.includes('application/x-image-id')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                    preview.classList.add('drop-hover');
+                }
+            });
+
+            preview.addEventListener('dragleave', () => {
+                preview.classList.remove('drop-hover');
+            });
+
+            preview.addEventListener('drop', (e) => {
+                e.preventDefault();
+                preview.classList.remove('drop-hover');
+
+                const imageId = e.dataTransfer.getData('application/x-image-id');
+                if (!imageId) return;
+
+                // Find the image in allLibraryData
+                const img = allLibraryData.find(i => i.id === imageId);
+                if (!img) return;
+
+                selectedImages[role] = img;
+                updatePreviews();
+                renderBrowser(); // refresh selected state
+            });
+
+            // Also allow clicking to remove
+            preview.addEventListener('click', () => {
+                if (selectedImages[role]) {
+                    selectedImages[role] = null;
+                    updatePreviews();
+                    renderBrowser();
+                }
+            });
+        });
     }
 
-    async function renderPicker() {
-        pickerGrid.innerHTML = '<p style="color:#bbb;font-size:12px;">Loading...</p>';
+    initDropZones();
 
-        const folderParam = pickerFolderId || 'root';
+    // ===== BROWSER PANEL (right column in slides view) =====
+    async function loadBrowser() {
+        const folderParam = browserFolderId || 'root';
         const [imgData, folderData] = await Promise.all([
             api('/api/admin/images?folder_id=' + folderParam),
-            api('/api/admin/folders?parent_id=' + (pickerFolderId || ''))
+            api('/api/admin/folders?parent_id=' + (browserFolderId || ''))
         ]);
 
-        pickerGrid.innerHTML = '';
+        // Store for browser rendering
+        browserGrid._images = imgData.images;
+        browserGrid._folders = folderData.folders;
+        browserGrid._breadcrumb = folderData.breadcrumb;
+
+        renderBrowser();
+    }
+
+    function renderBrowser() {
+        const images = browserGrid._images || [];
+        const folders = browserGrid._folders || [];
+        const breadcrumb = browserGrid._breadcrumb || [];
+
+        browserGrid.innerHTML = '';
 
         // Breadcrumb
-        const breadcrumb = document.createElement('div');
-        breadcrumb.className = 'picker-breadcrumb';
+        const breadcrumbEl = document.createElement('div');
+        breadcrumbEl.className = 'browser-breadcrumb';
         const rootLink = document.createElement('span');
-        rootLink.className = 'breadcrumb__item' + (!pickerFolderId ? ' breadcrumb__item--current' : '');
+        rootLink.className = 'breadcrumb__item' + (!browserFolderId ? ' breadcrumb__item--current' : '');
         rootLink.textContent = 'All';
-        if (pickerFolderId) {
-            rootLink.addEventListener('click', () => { pickerFolderId = null; renderPicker(); });
+        if (browserFolderId) {
+            rootLink.addEventListener('click', () => { browserFolderId = null; loadBrowser(); });
         }
-        breadcrumb.appendChild(rootLink);
+        breadcrumbEl.appendChild(rootLink);
 
-        for (const crumb of folderData.breadcrumb) {
+        for (const crumb of breadcrumb) {
             const sep = document.createElement('span');
             sep.className = 'breadcrumb__sep';
             sep.textContent = ' / ';
-            breadcrumb.appendChild(sep);
+            breadcrumbEl.appendChild(sep);
 
             const link = document.createElement('span');
-            const isLast = crumb.id === pickerFolderId;
+            const isLast = crumb.id === browserFolderId;
             link.className = 'breadcrumb__item' + (isLast ? ' breadcrumb__item--current' : '');
             link.textContent = crumb.name;
             if (!isLast) {
-                link.addEventListener('click', () => { pickerFolderId = crumb.id; renderPicker(); });
+                link.addEventListener('click', () => { browserFolderId = crumb.id; loadBrowser(); });
             }
-            breadcrumb.appendChild(link);
+            breadcrumbEl.appendChild(link);
         }
-        pickerGrid.appendChild(breadcrumb);
+        browserGrid.appendChild(breadcrumbEl);
 
-        // Folder cards in picker
-        if (folderData.folders.length > 0) {
+        // Folder cards
+        if (folders.length > 0) {
             const foldersRow = document.createElement('div');
-            foldersRow.className = 'picker-folders-row';
-            folderData.folders.forEach(f => {
+            foldersRow.className = 'browser-folders-row';
+            folders.forEach(f => {
                 const btn = document.createElement('div');
-                btn.className = 'picker-folder';
+                btn.className = 'browser-folder';
                 btn.innerHTML = '<span class="folder-card__icon">&#128193;</span> ' + escHtml(f.name);
-                btn.addEventListener('click', () => { pickerFolderId = f.id; renderPicker(); });
+                btn.addEventListener('click', () => { browserFolderId = f.id; loadBrowser(); });
                 foldersRow.appendChild(btn);
             });
-            pickerGrid.appendChild(foldersRow);
+            browserGrid.appendChild(foldersRow);
         }
 
         // Images
-        const images = imgData.images;
-        if (images.length === 0 && folderData.folders.length === 0) {
-            pickerGrid.innerHTML += '<p style="color:#bbb;font-size:12px;">This folder is empty.</p>';
+        if (images.length === 0 && folders.length === 0) {
+            browserGrid.innerHTML += '<p style="color:#bbb;font-size:12px;text-align:center;padding:1rem;">Empty folder.</p>';
             return;
         }
 
@@ -390,29 +431,46 @@
             }
         }
 
+        // Which images are currently selected in slots
+        const slotImageIds = new Set();
+        for (const role of ['left', 'right', 'wide']) {
+            if (selectedImages[role]) slotImageIds.add(selectedImages[role].id);
+        }
+
         const sorted = [...images].sort((a, b) => a.filename.localeCompare(b.filename));
         const imgsContainer = document.createElement('div');
-        imgsContainer.className = 'picker-images';
+        imgsContainer.className = 'browser-images';
 
         sorted.forEach(img => {
             const card = document.createElement('div');
             const isUsed = usedIds.has(img.id) && !editingImageIds.has(img.id);
-            card.className = 'image-card' + (isUsed ? ' image-card--used' : '');
-
-            if (selectedImages[activeSlot] && selectedImages[activeSlot].id === img.id) {
-                card.classList.add('selected');
-            }
+            const isInSlot = slotImageIds.has(img.id);
+            card.className = 'image-card' + (isUsed ? ' image-card--used' : '') + (isInSlot ? ' selected' : '');
+            card.draggable = true;
 
             card.innerHTML = '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">';
-            card.addEventListener('click', () => {
-                selectedImages[activeSlot] = img;
-                updatePreviews();
-                imagePicker.style.display = 'none';
+
+            // Drag start: set image ID
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('application/x-image-id', img.id);
+                e.dataTransfer.effectAllowed = 'copy';
+
+                // Custom drag image
+                const ghost = document.createElement('div');
+                ghost.style.cssText = 'position:absolute;top:-9999px;width:60px;height:60px;overflow:hidden;border-radius:4px;';
+                const ghostImg = document.createElement('img');
+                ghostImg.src = img.src_half || img.src;
+                ghostImg.style.cssText = 'width:60px;height:60px;object-fit:cover;';
+                ghost.appendChild(ghostImg);
+                document.body.appendChild(ghost);
+                e.dataTransfer.setDragImage(ghost, 30, 30);
+                setTimeout(() => ghost.remove(), 0);
             });
+
             imgsContainer.appendChild(card);
         });
 
-        pickerGrid.appendChild(imgsContainer);
+        browserGrid.appendChild(imgsContainer);
     }
 
     // ===== SAVE SLIDE =====
@@ -482,7 +540,6 @@
     const selectCount = document.getElementById('select-count');
 
     btnNewFolder.addEventListener('click', () => {
-        // Find or create folders row
         let foldersRow = imagesGrid.querySelector('.folders-row');
         if (!foldersRow) {
             foldersRow = document.createElement('div');
@@ -495,7 +552,6 @@
             }
         }
 
-        // Check if there's already an input open
         if (foldersRow.querySelector('.folder-card--new')) return;
 
         const newCard = document.createElement('div');
@@ -549,7 +605,7 @@
         foldersData = folderData.folders;
         breadcrumbData = folderData.breadcrumb;
 
-        // Also load ALL images (no folder filter) for the slide picker
+        // Also load ALL images (no folder filter) for reference
         const allData = await api('/api/admin/images');
         allLibraryData = allData.images;
 
@@ -596,13 +652,11 @@
     }
 
     btnMoveSelected.addEventListener('click', async () => {
-        // Toggle dropdown
         if (document.querySelector('.move-dropdown')) {
             closeMoveDropdown();
             return;
         }
 
-        // Fetch all folders for the dropdown
         const allFolders = [];
         async function fetchFolders(parentId, depth) {
             const param = parentId || '';
@@ -617,7 +671,6 @@
         const dropdown = document.createElement('div');
         dropdown.className = 'move-dropdown';
 
-        // Root option
         const rootOpt = document.createElement('div');
         rootOpt.className = 'move-dropdown__item' + (!currentFolderId ? ' move-dropdown__item--current' : '');
         rootOpt.textContent = 'Library (root)';
@@ -635,7 +688,6 @@
 
         btnMoveSelected.parentElement.appendChild(dropdown);
 
-        // Close on outside click
         setTimeout(() => {
             document.addEventListener('click', function closeHandler(e) {
                 if (!dropdown.contains(e.target) && e.target !== btnMoveSelected) {
@@ -677,7 +729,6 @@
     btnDeleteSelected.addEventListener('click', () => {
         if (selectedLibraryIds.size === 0) return;
 
-        // Check if already armed (confirm step)
         if (btnDeleteSelected.dataset.armed) {
             const ids = [...selectedLibraryIds];
             btnDeleteSelected.textContent = 'Deleting...';
@@ -698,7 +749,6 @@
                     btnDeleteSelected.disabled = false;
                 });
         } else {
-            // First click: arm
             btnDeleteSelected.dataset.armed = '1';
             btnDeleteSelected.textContent = 'Confirm delete (' + selectedLibraryIds.size + ')';
             btnDeleteSelected.classList.add('btn-delete-selected--armed');
@@ -971,6 +1021,7 @@
 
         e.target.value = '';
         await loadLibrary();
+        await loadBrowser(); // refresh browser panel too
     });
 
     function getImageDims(file) {
@@ -990,7 +1041,6 @@
         const dims = await getImageDims(file);
         const shortSide = Math.min(dims.width, dims.height);
 
-        // Skip recompression for already-optimized images (short side <= 1800)
         const fullPromise = shortSide <= 1800
             ? Promise.resolve({ blob: file, width: dims.width, height: dims.height })
             : resizeImage(file, 1600, 0.87);
@@ -1076,7 +1126,7 @@
 
     // ===== INIT =====
     async function init() {
-        await Promise.all([loadSlides(), loadLibrary()]);
+        await Promise.all([loadSlides(), loadLibrary(), loadBrowser()]);
 
         // Load shuffle setting
         try {

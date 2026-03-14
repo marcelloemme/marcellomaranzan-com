@@ -74,21 +74,19 @@ body {
 .btn--danger:hover { background: #fee; }
 .btn--small { padding: 0.25rem 0.6rem; font-size: 12px; }
 
-/* ===== SLIDES VIEW: TWO COLUMNS ===== */
+/* ===== SLIDES VIEW: THREE COLUMNS ===== */
 .slides-view {
-    display: flex;
-    gap: 2rem;
+    display: grid;
+    grid-template-columns: 1fr 340px 300px;
+    gap: 1.5rem;
     align-items: flex-start;
 }
 
 .slides-panel {
-    flex: 1;
     min-width: 0;
 }
 
 .editor-panel {
-    width: 380px;
-    flex-shrink: 0;
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
@@ -112,6 +110,100 @@ body {
     display: flex;
     gap: 0.5rem;
     margin-top: 1.25rem;
+}
+
+/* ===== BROWSER PANEL (right column) ===== */
+.browser-panel {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1rem;
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+}
+
+.browser-panel__header {
+    margin-bottom: 0.75rem;
+}
+
+.browser-panel__header h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ===== BROWSER GRID ===== */
+.browser-grid .browser-breadcrumb {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    margin-bottom: 0.4rem;
+}
+
+.browser-grid .browser-folders-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.browser-folder {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.5rem;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.browser-folder:hover {
+    border-color: #999;
+    background: #eee;
+}
+
+.browser-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 0.4rem;
+}
+
+.browser-images .image-card {
+    cursor: grab;
+}
+.browser-images .image-card:active {
+    cursor: grabbing;
+}
+.browser-images .image-card img {
+    pointer-events: none;
+}
+
+/* Hide info/buttons inside browser panel */
+.browser-grid .image-card__info { display: none; }
+.browser-grid .image-card__delete { display: none !important; }
+.browser-grid .image-card__link { display: none !important; }
+
+/* Drag ghost */
+.drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.85;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.drag-ghost img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    display: block;
 }
 
 /* ===== SHUFFLE TOGGLE ===== */
@@ -206,7 +298,7 @@ body {
     flex-shrink: 0;
 }
 
-/* ===== IMAGES GRID ===== */
+/* ===== IMAGES GRID (library) ===== */
 .images-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -314,51 +406,6 @@ body {
 }
 .image-card:hover .image-card__delete { display: flex; }
 
-/* Picker container */
-.picker-grid .image-card__info { display: none; }
-.picker-grid .image-card__delete { display: none !important; }
-.picker-grid .image-card__link { display: none !important; }
-
-/* Picker breadcrumb */
-.picker-breadcrumb {
-    display: flex;
-    align-items: center;
-    font-size: 12px;
-    margin-bottom: 0.4rem;
-}
-
-/* Picker folder row */
-.picker-folders-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-bottom: 0.5rem;
-}
-
-.picker-folder {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.25rem 0.5rem;
-    background: #f5f5f5;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 11px;
-    white-space: nowrap;
-}
-.picker-folder:hover {
-    border-color: #999;
-    background: #eee;
-}
-
-/* Picker images grid */
-.picker-images {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    gap: 0.5rem;
-}
-
 /* ===== FORM ===== */
 .form-group { margin-bottom: 1.25rem; }
 
@@ -416,8 +463,8 @@ body {
     justify-content: center;
     color: #bbb;
     font-size: 12px;
-    cursor: pointer;
     overflow: hidden;
+    transition: border-color 0.15s, background 0.15s;
 }
 .image-slot__preview img {
     width: 100%;
@@ -426,27 +473,45 @@ body {
 }
 .image-slot__preview:hover { border-color: #999; }
 
+/* Drop zone active states */
+.image-slot__preview.drop-hover {
+    border-color: #333;
+    background: #eef;
+    border-style: solid;
+}
+
+/* Clear button on slot */
+.image-slot__clear {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    z-index: 2;
+}
+.image-slot__preview-wrap {
+    position: relative;
+}
+.image-slot__preview-wrap:hover .image-slot__clear {
+    display: flex;
+}
+
 .caption-input {
     padding: 0.35rem 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 12px;
     font-family: inherit;
-}
-
-/* ===== IMAGE PICKER ===== */
-.image-picker {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid #eee;
-}
-
-.image-picker h3 {
-    font-size: 12px;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
 }
 
 /* ===== UPLOAD STATUS ===== */
