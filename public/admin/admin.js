@@ -532,11 +532,11 @@
         // Skip recompression for already-optimized images (short side <= 1800)
         const fullPromise = shortSide <= 1800
             ? Promise.resolve({ blob: file, width: dims.width, height: dims.height })
-            : resizeImage(file, 1600, 0.80);
+            : resizeImage(file, 1600, 0.87);
 
         const [full, half] = await Promise.all([
             fullPromise,
-            resizeImage(file, 800, 0.80)
+            resizeImage(file, 800, 0.87)
         ]);
 
         const formData = new FormData();
