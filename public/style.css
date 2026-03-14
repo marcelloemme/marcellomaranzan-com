@@ -117,6 +117,7 @@ img {
  */
 
 .slide--duo .slide__photo {
+    width: calc(50% - var(--gap) / 2);
     height: var(--photo-h);
     overflow: visible;
     flex-shrink: 0;
