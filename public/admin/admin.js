@@ -15,6 +15,7 @@
     let currentFolderId = null;  // null = root
     let foldersData = [];
     let breadcrumbData = [];
+    let pickerFolderId = null;  // remembers last folder used in picker
 
     // ===== DOM REFS =====
     const slidesList = document.getElementById('slides-list');
@@ -318,10 +319,63 @@
         imagePicker.style.display = '';
     }
 
-    function renderPicker() {
+    async function renderPicker() {
+        pickerGrid.innerHTML = '<p style="color:#bbb;font-size:12px;">Loading...</p>';
+
+        const folderParam = pickerFolderId || 'root';
+        const [imgData, folderData] = await Promise.all([
+            api('/api/admin/images?folder_id=' + folderParam),
+            api('/api/admin/folders?parent_id=' + (pickerFolderId || ''))
+        ]);
+
         pickerGrid.innerHTML = '';
-        if (allLibraryData.length === 0) {
-            pickerGrid.innerHTML = '<p style="color:#bbb;font-size:12px;">No images. Upload some in Library first.</p>';
+
+        // Breadcrumb
+        const breadcrumb = document.createElement('div');
+        breadcrumb.className = 'picker-breadcrumb';
+        const rootLink = document.createElement('span');
+        rootLink.className = 'breadcrumb__item' + (!pickerFolderId ? ' breadcrumb__item--current' : '');
+        rootLink.textContent = 'All';
+        if (pickerFolderId) {
+            rootLink.addEventListener('click', () => { pickerFolderId = null; renderPicker(); });
+        }
+        breadcrumb.appendChild(rootLink);
+
+        for (const crumb of folderData.breadcrumb) {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb__sep';
+            sep.textContent = ' / ';
+            breadcrumb.appendChild(sep);
+
+            const link = document.createElement('span');
+            const isLast = crumb.id === pickerFolderId;
+            link.className = 'breadcrumb__item' + (isLast ? ' breadcrumb__item--current' : '');
+            link.textContent = crumb.name;
+            if (!isLast) {
+                link.addEventListener('click', () => { pickerFolderId = crumb.id; renderPicker(); });
+            }
+            breadcrumb.appendChild(link);
+        }
+        pickerGrid.appendChild(breadcrumb);
+
+        // Folder cards in picker
+        if (folderData.folders.length > 0) {
+            const foldersRow = document.createElement('div');
+            foldersRow.className = 'picker-folders-row';
+            folderData.folders.forEach(f => {
+                const btn = document.createElement('div');
+                btn.className = 'picker-folder';
+                btn.innerHTML = '<span class="folder-card__icon">&#128193;</span> ' + escHtml(f.name);
+                btn.addEventListener('click', () => { pickerFolderId = f.id; renderPicker(); });
+                foldersRow.appendChild(btn);
+            });
+            pickerGrid.appendChild(foldersRow);
+        }
+
+        // Images
+        const images = imgData.images;
+        if (images.length === 0 && folderData.folders.length === 0) {
+            pickerGrid.innerHTML += '<p style="color:#bbb;font-size:12px;">This folder is empty.</p>';
             return;
         }
 
@@ -336,7 +390,9 @@
             }
         }
 
-        const sorted = [...allLibraryData].sort((a, b) => a.filename.localeCompare(b.filename));
+        const sorted = [...images].sort((a, b) => a.filename.localeCompare(b.filename));
+        const imgsContainer = document.createElement('div');
+        imgsContainer.className = 'picker-images';
 
         sorted.forEach(img => {
             const card = document.createElement('div');
@@ -353,8 +409,10 @@
                 updatePreviews();
                 imagePicker.style.display = 'none';
             });
-            pickerGrid.appendChild(card);
+            imgsContainer.appendChild(card);
         });
+
+        pickerGrid.appendChild(imgsContainer);
     }
 
     // ===== SAVE SLIDE =====
@@ -800,7 +858,7 @@
                     '<span class="filename">' + escHtml(img.filename) + '</span>' +
                     img.width + '&times;' + img.height + ' &middot; ' + formatSize(img.size_bytes) +
                 '</div>' +
-                (selectionMode ? '' : '<button class="image-card__delete">&times;</button>');
+                (selectionMode ? '' : '<button class="image-card__link" title="Copy direct link">&#128279;</button><button class="image-card__delete">&times;</button>');
 
             if (selectionMode) {
                 card.addEventListener('click', (e) => {
@@ -822,6 +880,19 @@
                     renderLibrary();
                 });
             } else {
+                // Copy link button
+                const linkBtn = card.querySelector('.image-card__link');
+                linkBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const url = window.location.origin + img.src + '?dl=1';
+                    navigator.clipboard.writeText(url).then(() => {
+                        linkBtn.classList.add('image-card__link--copied');
+                        setTimeout(() => linkBtn.classList.remove('image-card__link--copied'), 1000);
+                    }).catch(() => {
+                        showToast('Failed to copy link');
+                    });
+                });
+
                 const delBtn = card.querySelector('.image-card__delete');
                 delBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
