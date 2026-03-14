@@ -129,6 +129,10 @@ img {
     height: auto;
 }
 
+.slide--duo .slide__photo--landscape img {
+    width: 100%;
+}
+
 .slide--duo .slide__photo--empty {
     aspect-ratio: 3/4;
 }

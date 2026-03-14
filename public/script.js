@@ -272,7 +272,9 @@
 
             function duoCol(img, side) {
                 if (!img) return '<div class="slide__photo slide__photo--' + side + ' slide__photo--empty"></div>';
-                return '<div class="slide__photo slide__photo--' + side + '">' +
+                var cls = 'slide__photo slide__photo--' + side;
+                if (img.width > img.height) cls += ' slide__photo--landscape';
+                return '<div class="' + cls + '">' +
                     '<img data-src-half="' + (img.src_half || '') + '" ' +
                          'data-src-full="' + img.src + '" alt="">' +
                     '<p class="slide__caption">' + (img.caption || '') + '</p>' +
