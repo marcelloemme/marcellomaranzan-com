@@ -15,6 +15,7 @@
     let foldersData = [];
     let breadcrumbData = [];
     let browserFolderId = null;  // remembers folder in browser panel (slides view)
+    let hideUsedImages = false;  // toggle to hide "in use" images in browser
 
     // ===== DOM REFS =====
     const slidesList = document.getElementById('slides-list');
@@ -437,7 +438,13 @@
             if (selectedImages[role]) slotImageIds.add(selectedImages[role].id);
         }
 
-        const sorted = [...images].sort((a, b) => a.filename.localeCompare(b.filename));
+        let sorted = [...images].sort((a, b) => a.filename.localeCompare(b.filename));
+
+        // Filter out used images if toggle is on
+        if (hideUsedImages) {
+            sorted = sorted.filter(img => !usedIds.has(img.id) || editingImageIds.has(img.id));
+        }
+
         const imgsContainer = document.createElement('div');
         imgsContainer.className = 'browser-images';
 
@@ -527,6 +534,7 @@
 
             resetEditor();
             await loadSlides();
+            renderBrowser(); // refresh "in use" overlay
         } catch (err) {
             showToast('Error: ' + err.message);
         }
@@ -1102,8 +1110,14 @@
         });
     }
 
-    // ===== SHUFFLE TOGGLE =====
+    // ===== OPTIONS TOGGLES =====
     const shuffleCheck = document.getElementById('shuffle-check');
+    const hideUsedCheck = document.getElementById('hide-used-check');
+
+    hideUsedCheck.addEventListener('change', () => {
+        hideUsedImages = hideUsedCheck.checked;
+        renderBrowser();
+    });
 
     shuffleCheck.addEventListener('change', async () => {
         try {
