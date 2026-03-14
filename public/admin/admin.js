@@ -4,6 +4,7 @@
     // ===== STATE =====
     let slidesData = [];
     let libraryData = [];
+    let allLibraryData = [];
     let currentLayout = 'duo';
     let selectedImages = { left: null, right: null, wide: null };
     let activeSlot = null;
@@ -11,6 +12,9 @@
     let selectionMode = false;
     let selectedLibraryIds = new Set();
     let lastClickedIndex = -1;
+    let currentFolderId = null;  // null = root
+    let foldersData = [];
+    let breadcrumbData = [];
 
     // ===== DOM REFS =====
     const slidesList = document.getElementById('slides-list');
@@ -173,7 +177,7 @@
         selectedImages = { left: null, right: null, wide: null };
 
         for (const img of slide.images) {
-            const libImg = libraryData.find(l => l.id === img.image_id);
+            const libImg = allLibraryData.find(l => l.id === img.image_id);
             if (libImg) {
                 selectedImages[img.role] = libImg;
             }
@@ -316,7 +320,7 @@
 
     function renderPicker() {
         pickerGrid.innerHTML = '';
-        if (libraryData.length === 0) {
+        if (allLibraryData.length === 0) {
             pickerGrid.innerHTML = '<p style="color:#bbb;font-size:12px;">No images. Upload some in Library first.</p>';
             return;
         }
@@ -332,7 +336,7 @@
             }
         }
 
-        const sorted = [...libraryData].sort((a, b) => a.filename.localeCompare(b.filename));
+        const sorted = [...allLibraryData].sort((a, b) => a.filename.localeCompare(b.filename));
 
         sorted.forEach(img => {
             const card = document.createElement('div');
@@ -415,12 +419,30 @@
     // ===== IMAGE LIBRARY =====
     const btnSelectMode = document.getElementById('btn-select-mode');
     const btnDeleteSelected = document.getElementById('btn-delete-selected');
+    const btnMoveSelected = document.getElementById('btn-move-selected');
     const selectCount = document.getElementById('select-count');
 
     async function loadLibrary() {
-        const data = await api('/api/admin/images');
-        libraryData = data.images;
+        const folderParam = currentFolderId || 'root';
+        const [imgData, folderData] = await Promise.all([
+            api('/api/admin/images?folder_id=' + folderParam),
+            api('/api/admin/folders?parent_id=' + (currentFolderId || ''))
+        ]);
+        libraryData = imgData.images;
+        foldersData = folderData.folders;
+        breadcrumbData = folderData.breadcrumb;
+
+        // Also load ALL images (no folder filter) for the slide picker
+        const allData = await api('/api/admin/images');
+        allLibraryData = allData.images;
+
         renderLibrary();
+    }
+
+    function navigateToFolder(folderId) {
+        currentFolderId = folderId;
+        exitSelectionMode();
+        loadLibrary();
     }
 
     function exitSelectionMode() {
@@ -430,7 +452,9 @@
         btnSelectMode.textContent = 'Select';
         btnSelectMode.classList.remove('btn--primary');
         btnDeleteSelected.style.display = 'none';
+        btnMoveSelected.style.display = 'none';
         selectCount.style.display = 'none';
+        closeMoveDropdown();
         renderLibrary();
     }
 
@@ -438,11 +462,87 @@
         const n = selectedLibraryIds.size;
         if (n > 0) {
             btnDeleteSelected.style.display = '';
+            btnMoveSelected.style.display = '';
             selectCount.style.display = '';
             selectCount.textContent = n + ' selected';
         } else {
             btnDeleteSelected.style.display = 'none';
+            btnMoveSelected.style.display = 'none';
             selectCount.style.display = 'none';
+        }
+    }
+
+    // Move dropdown
+    function closeMoveDropdown() {
+        const existing = document.querySelector('.move-dropdown');
+        if (existing) existing.remove();
+    }
+
+    btnMoveSelected.addEventListener('click', async () => {
+        // Toggle dropdown
+        if (document.querySelector('.move-dropdown')) {
+            closeMoveDropdown();
+            return;
+        }
+
+        // Fetch all folders for the dropdown
+        const allFolders = [];
+        async function fetchFolders(parentId, depth) {
+            const param = parentId || '';
+            const data = await api('/api/admin/folders?parent_id=' + param);
+            for (const f of data.folders) {
+                allFolders.push({ ...f, depth });
+                await fetchFolders(f.id, depth + 1);
+            }
+        }
+        await fetchFolders(null, 0);
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'move-dropdown';
+
+        // Root option
+        const rootOpt = document.createElement('div');
+        rootOpt.className = 'move-dropdown__item' + (!currentFolderId ? ' move-dropdown__item--current' : '');
+        rootOpt.textContent = 'Library (root)';
+        rootOpt.addEventListener('click', () => moveSelectedTo(null));
+        dropdown.appendChild(rootOpt);
+
+        allFolders.forEach(f => {
+            const opt = document.createElement('div');
+            opt.className = 'move-dropdown__item' + (f.id === currentFolderId ? ' move-dropdown__item--current' : '');
+            opt.style.paddingLeft = (12 + f.depth * 16) + 'px';
+            opt.textContent = f.name;
+            opt.addEventListener('click', () => moveSelectedTo(f.id));
+            dropdown.appendChild(opt);
+        });
+
+        btnMoveSelected.parentElement.appendChild(dropdown);
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', function closeHandler(e) {
+                if (!dropdown.contains(e.target) && e.target !== btnMoveSelected) {
+                    closeMoveDropdown();
+                    document.removeEventListener('click', closeHandler);
+                }
+            });
+        }, 0);
+    });
+
+    async function moveSelectedTo(folderId) {
+        closeMoveDropdown();
+        const ids = [...selectedLibraryIds];
+        try {
+            await api('/api/admin/images', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_ids: ids, folder_id: folderId })
+            });
+            showToast(ids.length + ' image' + (ids.length > 1 ? 's' : '') + ' moved.');
+            exitSelectionMode();
+            await loadLibrary();
+        } catch (err) {
+            showToast('Error: ' + err.message);
         }
     }
 
@@ -497,14 +597,180 @@
     });
 
     function renderLibrary() {
-        if (libraryData.length === 0) {
-            imagesGrid.innerHTML = '<div class="empty-state"><p>No images uploaded yet.</p></div>';
+        imagesGrid.innerHTML = '';
+
+        // Breadcrumb
+        const breadcrumbEl = document.createElement('div');
+        breadcrumbEl.className = 'breadcrumb';
+        const rootLink = document.createElement('span');
+        rootLink.className = 'breadcrumb__item' + (!currentFolderId ? ' breadcrumb__item--current' : '');
+        rootLink.textContent = 'Library';
+        if (currentFolderId) {
+            rootLink.addEventListener('click', () => navigateToFolder(null));
+        }
+        breadcrumbEl.appendChild(rootLink);
+
+        for (const crumb of breadcrumbData) {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb__sep';
+            sep.textContent = ' / ';
+            breadcrumbEl.appendChild(sep);
+
+            const link = document.createElement('span');
+            const isLast = crumb.id === currentFolderId;
+            link.className = 'breadcrumb__item' + (isLast ? ' breadcrumb__item--current' : '');
+            link.textContent = crumb.name;
+            if (!isLast) {
+                link.addEventListener('click', () => navigateToFolder(crumb.id));
+            }
+            breadcrumbEl.appendChild(link);
+        }
+        imagesGrid.appendChild(breadcrumbEl);
+
+        // Folder cards
+        if (foldersData.length > 0 || !selectionMode) {
+            const foldersRow = document.createElement('div');
+            foldersRow.className = 'folders-row';
+
+            foldersData.forEach(folder => {
+                const card = document.createElement('div');
+                card.className = 'folder-card';
+
+                card.innerHTML =
+                    '<span class="folder-card__icon">&#128193;</span>' +
+                    '<span class="folder-card__name">' + escHtml(folder.name) + '</span>' +
+                    '<div class="folder-card__actions">' +
+                        '<button class="folder-card__btn folder-card__rename" title="Rename">&#9998;</button>' +
+                        '<button class="folder-card__btn folder-card__delete" title="Delete">&times;</button>' +
+                    '</div>';
+
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.folder-card__actions')) return;
+                    navigateToFolder(folder.id);
+                });
+
+                // Rename
+                card.querySelector('.folder-card__rename').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const nameEl = card.querySelector('.folder-card__name');
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'folder-card__rename-input';
+                    input.value = folder.name;
+                    nameEl.replaceWith(input);
+                    input.focus();
+                    input.select();
+
+                    const doRename = async () => {
+                        const newName = input.value.trim();
+                        if (!newName || newName === folder.name) {
+                            input.replaceWith(nameEl);
+                            return;
+                        }
+                        try {
+                            await api('/api/admin/folders/' + folder.id, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name: newName })
+                            });
+                            await loadLibrary();
+                        } catch (err) {
+                            showToast('Error: ' + err.message);
+                            input.replaceWith(nameEl);
+                        }
+                    };
+
+                    input.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter') doRename();
+                        if (ev.key === 'Escape') input.replaceWith(nameEl);
+                    });
+                    input.addEventListener('blur', doRename);
+                });
+
+                // Delete folder
+                const delBtn = card.querySelector('.folder-card__delete');
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (delBtn.dataset.armed) {
+                        api('/api/admin/folders/' + folder.id, { method: 'DELETE' })
+                            .then(() => loadLibrary())
+                            .catch(err => showToast('Error: ' + err.message));
+                    } else {
+                        delBtn.dataset.armed = '1';
+                        delBtn.textContent = 'delete?';
+                        delBtn.style.width = 'auto';
+                        delBtn.style.padding = '2px 8px';
+                        setTimeout(() => {
+                            if (delBtn.dataset.armed) {
+                                delete delBtn.dataset.armed;
+                                delBtn.innerHTML = '&times;';
+                                delBtn.removeAttribute('style');
+                            }
+                        }, 3000);
+                    }
+                });
+
+                foldersRow.appendChild(card);
+            });
+
+            // New folder button (not in selection mode)
+            if (!selectionMode) {
+                const newFolderCard = document.createElement('div');
+                newFolderCard.className = 'folder-card folder-card--new';
+                newFolderCard.innerHTML = '<span class="folder-card__icon">+</span><span class="folder-card__name">New folder</span>';
+                newFolderCard.addEventListener('click', async () => {
+                    const nameEl = newFolderCard.querySelector('.folder-card__name');
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'folder-card__rename-input';
+                    input.placeholder = 'Folder name';
+                    nameEl.replaceWith(input);
+                    input.focus();
+
+                    const doCreate = async () => {
+                        const name = input.value.trim();
+                        if (!name) {
+                            await loadLibrary(); // re-render to reset
+                            return;
+                        }
+                        try {
+                            await api('/api/admin/folders', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name, parent_id: currentFolderId })
+                            });
+                            showToast('Folder created.');
+                            await loadLibrary();
+                        } catch (err) {
+                            showToast('Error: ' + err.message);
+                            await loadLibrary();
+                        }
+                    };
+
+                    input.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter') doCreate();
+                        if (ev.key === 'Escape') loadLibrary();
+                    });
+                    input.addEventListener('blur', doCreate);
+                });
+                foldersRow.appendChild(newFolderCard);
+            }
+
+            if (foldersRow.children.length > 0) {
+                imagesGrid.appendChild(foldersRow);
+            }
+        }
+
+        // Images
+        if (libraryData.length === 0 && foldersData.length === 0) {
+            imagesGrid.innerHTML += '<div class="empty-state"><p>This folder is empty.</p></div>';
             return;
         }
 
         const sorted = [...libraryData].sort((a, b) => a.filename.localeCompare(b.filename));
+        const imagesContainer = document.createElement('div');
+        imagesContainer.className = 'images-grid-inner';
 
-        imagesGrid.innerHTML = '';
         sorted.forEach((img, index) => {
             const card = document.createElement('div');
             const isSelected = selectedLibraryIds.has(img.id);
@@ -523,14 +789,12 @@
             if (selectionMode) {
                 card.addEventListener('click', (e) => {
                     if (e.shiftKey && lastClickedIndex >= 0) {
-                        // Shift+click: select range
                         const from = Math.min(lastClickedIndex, index);
                         const to = Math.max(lastClickedIndex, index);
                         for (let i = from; i <= to; i++) {
                             selectedLibraryIds.add(sorted[i].id);
                         }
                     } else {
-                        // Normal click: toggle
                         if (selectedLibraryIds.has(img.id)) {
                             selectedLibraryIds.delete(img.id);
                         } else {
@@ -542,7 +806,6 @@
                     renderLibrary();
                 });
             } else {
-                // Normal mode: single delete
                 const delBtn = card.querySelector('.image-card__delete');
                 delBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -577,8 +840,12 @@
                 });
             }
 
-            imagesGrid.appendChild(card);
+            imagesContainer.appendChild(card);
         });
+
+        if (sorted.length > 0) {
+            imagesGrid.appendChild(imagesContainer);
+        }
     }
 
     function formatSize(bytes) {
@@ -652,6 +919,9 @@
         formData.append('width', full.width);
         formData.append('height', full.height);
         formData.append('filename', file.name);
+        if (currentFolderId) {
+            formData.append('folder_id', currentFolderId);
+        }
 
         await api('/api/admin/images', { method: 'POST', body: formData });
     }

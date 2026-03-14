@@ -23,7 +23,15 @@ CREATE TABLE IF NOT EXISTS images (
     width       INTEGER NOT NULL,
     height      INTEGER NOT NULL,
     size_bytes  INTEGER NOT NULL,
+    folder_id   TEXT REFERENCES folders(id) ON DELETE SET NULL,
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS folders (
+    id        TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(8)))),
+    name      TEXT NOT NULL,
+    parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -33,3 +41,5 @@ CREATE TABLE IF NOT EXISTS settings (
 
 CREATE INDEX IF NOT EXISTS idx_slides_position ON slides(position);
 CREATE INDEX IF NOT EXISTS idx_slide_images_slide ON slide_images(slide_id);
+CREATE INDEX IF NOT EXISTS idx_images_folder ON images(folder_id);
+CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
