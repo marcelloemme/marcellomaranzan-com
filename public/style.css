@@ -217,6 +217,7 @@ img {
         padding: 0 var(--gap) 4% 0;
         align-items: flex-end;   /* push content to bottom */
         justify-content: flex-end; /* push content to right */
+        z-index: 20; /* above mobile nav zones */
     }
 
     .slide {
@@ -249,6 +250,27 @@ img {
     .slide--duo .slide__photo--right .slide__caption {
         padding-right: var(--gap);
     }
+
+    /* Single-landscape duo on mobile: show as solo (hide empty column) */
+    .slide--duo-single-landscape .slide__photo--empty {
+        display: none;
+    }
+
+    .slide--duo-single-landscape .slide__photo {
+        flex: none;
+        width: 100%;
+    }
+
+    /* Mobile full-screen nav zones */
+    .mobile-nav {
+        position: fixed;
+        top: 0;
+        height: 100%;
+        width: 50%;
+        z-index: 10;
+    }
+    .mobile-nav--prev { left: 0; cursor: w-resize; }
+    .mobile-nav--next { right: 0; cursor: e-resize; }
 
     /* SOLO mobile: full width, no padding */
     .slide--solo .slide__photo--wide {

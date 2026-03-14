@@ -5,6 +5,7 @@
     const slideshow = document.getElementById('slideshow');
     let slides = [];
     let currentIndex = 0;
+    let introActive = true;
 
     // ===== LAYOUT CALCULATION =====
 
@@ -186,12 +187,24 @@
         if (index < 0 || index >= slides.length || index === currentIndex) return;
 
         slides[currentIndex].classList.remove('active');
-        slides[index].classList.add('active');
-        currentIndex = index;
+
+        // If leaving intro slide, remove it and adjust index
+        if (introActive && currentIndex === 0) {
+            introActive = false;
+            slides[0].remove();
+            slides = slideshow.querySelectorAll('.slide');
+            slides.forEach(function(s, i) { s.dataset.index = i; });
+            index = 0; // first remaining slide
+            slides[0].classList.add('active');
+            currentIndex = 0;
+        } else {
+            slides[index].classList.add('active');
+            currentIndex = index;
+        }
 
         // Rebuild queue from new position
         queueGeneration++;
-        buildQueue(index);
+        buildQueue(currentIndex);
         processQueue();
     }
 
@@ -285,7 +298,13 @@
 
             // Single-image duo: slide needs explicit width so the
             // column container (50%) resolves against slideshow, not content
-            if (!left || !right) el.style.width = '100%';
+            if (!left || !right) {
+                el.style.width = '100%';
+                var only = left || right;
+                if (only && only.width > only.height) {
+                    el.classList.add('slide--duo-single-landscape');
+                }
+            }
         } else {
             const wide = slideData.images.find(function(img) { return img.role === 'wide'; });
 
@@ -399,40 +418,43 @@
         return result;
     }
 
-    // ===== INTRO SLIDE (click-anywhere, then remove) =====
+    // ===== MOBILE FULL-SCREEN NAV =====
+
+    function bindMobileNav() {
+        var isPortrait = window.innerHeight > window.innerWidth;
+        if (!isPortrait) return;
+
+        var prev = document.createElement('div');
+        prev.className = 'mobile-nav mobile-nav--prev';
+        prev.addEventListener('click', function(e) {
+            if (e.target.closest('#info a')) return;
+            goPrev();
+        });
+
+        var next = document.createElement('div');
+        next.className = 'mobile-nav mobile-nav--next';
+        next.addEventListener('click', function(e) {
+            if (e.target.closest('#info a')) return;
+            goNext();
+        });
+
+        document.body.appendChild(prev);
+        document.body.appendChild(next);
+    }
+
+    // ===== INTRO CLICK (desktop: click anywhere on intro slide) =====
 
     function bindIntroClick() {
         if (slides.length < 2) return;
 
-        function handleIntroClick(e) {
-            // Ignore clicks on info links
+        function handler(e) {
+            if (!introActive || currentIndex !== 0) return;
             if (e.target.closest('#info a')) return;
-
-            // Only act while on the intro slide (index 0)
-            if (currentIndex !== 0) return;
-
-            // Advance to slide 1 (which will become 0 after removal)
-            slides[0].classList.remove('active');
-            slides[1].classList.add('active');
-
-            // Remove intro slide from DOM and rebuild slides array
-            slides[0].remove();
-            slides = slideshow.querySelectorAll('.slide');
-            currentIndex = 0;
-
-            // Re-index remaining slides
-            slides.forEach((s, i) => { s.dataset.index = i; });
-
-            // Rebuild prefetch queue from new position
-            queueGeneration++;
-            buildQueue(0);
-            processQueue();
-
-            // Remove this listener — intro is gone
-            document.removeEventListener('click', handleIntroClick);
+            goNext(); // goTo handles intro removal
+            document.removeEventListener('click', handler);
         }
 
-        document.addEventListener('click', handleIntroClick);
+        document.addEventListener('click', handler);
     }
 
     // ===== INIT =====
@@ -463,6 +485,7 @@
             currentIndex = 0;
 
             bindNavigation();
+            bindMobileNav();
             bindIntroClick();
 
             // Load first slide half-res → layout → start full queue
