@@ -131,7 +131,10 @@ img {
 
 .slide--duo .slide__photo--landscape img {
     width: 100%;
+    min-width: 100%;
+    height: auto;
     max-height: none;
+    max-width: none;
 }
 
 .slide--duo .slide__photo--empty {
