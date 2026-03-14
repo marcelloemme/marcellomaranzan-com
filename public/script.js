@@ -282,6 +282,10 @@
             }
 
             el.innerHTML = duoCol(left, 'left') + duoCol(right, 'right');
+
+            // Single-image duo: slide needs explicit width so the
+            // column container (50%) resolves against slideshow, not content
+            if (!left || !right) el.style.width = '100%';
         } else {
             const wide = slideData.images.find(function(img) { return img.role === 'wide'; });
 
