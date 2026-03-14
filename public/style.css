@@ -261,6 +261,10 @@ img {
         width: 100%;
     }
 
+    .slide--duo-single-landscape .slide__caption {
+        padding-right: var(--gap);
+    }
+
     /* Mobile full-screen nav zones */
     .mobile-nav {
         position: fixed;
