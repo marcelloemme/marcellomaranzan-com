@@ -314,10 +314,10 @@ body {
 }
 .image-card:hover .image-card__delete { display: flex; }
 
-/* Picker: smaller info */
-.images-grid--picker .image-card__info { display: none; }
-.images-grid--picker .image-card__delete { display: none !important; }
-.images-grid--picker .image-card__link { display: none !important; }
+/* Picker container */
+.picker-grid .image-card__info { display: none; }
+.picker-grid .image-card__delete { display: none !important; }
+.picker-grid .image-card__link { display: none !important; }
 
 /* Picker breadcrumb */
 .picker-breadcrumb {
