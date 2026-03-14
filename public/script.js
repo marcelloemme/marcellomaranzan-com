@@ -223,8 +223,26 @@
         slideshow.querySelectorAll('.slide--duo').forEach(slide => {
             const leftImg = slide.querySelector('.slide__photo--left img');
             const rightImg = slide.querySelector('.slide__photo--right img');
-            if (leftImg) leftImg.addEventListener('click', goPrev);
-            if (rightImg) rightImg.addEventListener('click', goNext);
+
+            if (leftImg && rightImg) {
+                // Both images: left = prev, right = next
+                leftImg.addEventListener('click', goPrev);
+                rightImg.addEventListener('click', goNext);
+            } else {
+                // Single image: split into two nav zones like solo
+                const photo = leftImg ? leftImg.parentElement : rightImg ? rightImg.parentElement : null;
+                if (photo) {
+                    photo.style.position = 'relative';
+                    const prevZone = document.createElement('div');
+                    prevZone.className = 'nav-zone nav-zone--prev';
+                    prevZone.addEventListener('click', goPrev);
+                    const nextZone = document.createElement('div');
+                    nextZone.className = 'nav-zone nav-zone--next';
+                    nextZone.addEventListener('click', goNext);
+                    photo.appendChild(prevZone);
+                    photo.appendChild(nextZone);
+                }
+            }
         });
 
         slideshow.querySelectorAll('.slide--solo .slide__photo--wide').forEach(photoWrap => {
@@ -252,17 +270,16 @@
             const left = slideData.images.find(function(img) { return img.role === 'left'; });
             const right = slideData.images.find(function(img) { return img.role === 'right'; });
 
-            el.innerHTML =
-                '<div class="slide__photo slide__photo--left">' +
-                    '<img data-src-half="' + (left ? left.src_half || '' : '') + '" ' +
-                         'data-src-full="' + (left ? left.src : '') + '" alt="">' +
-                    '<p class="slide__caption">' + (left ? left.caption : '') + '</p>' +
-                '</div>' +
-                '<div class="slide__photo slide__photo--right">' +
-                    '<img data-src-half="' + (right ? right.src_half || '' : '') + '" ' +
-                         'data-src-full="' + (right ? right.src : '') + '" alt="">' +
-                    '<p class="slide__caption">' + (right ? right.caption : '') + '</p>' +
+            function duoCol(img, side) {
+                if (!img) return '<div class="slide__photo slide__photo--' + side + ' slide__photo--empty"></div>';
+                return '<div class="slide__photo slide__photo--' + side + '">' +
+                    '<img data-src-half="' + (img.src_half || '') + '" ' +
+                         'data-src-full="' + img.src + '" alt="">' +
+                    '<p class="slide__caption">' + (img.caption || '') + '</p>' +
                 '</div>';
+            }
+
+            el.innerHTML = duoCol(left, 'left') + duoCol(right, 'right');
         } else {
             const wide = slideData.images.find(function(img) { return img.role === 'wide'; });
 

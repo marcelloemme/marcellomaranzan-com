@@ -127,6 +127,10 @@ img {
     width: auto;
 }
 
+.slide--duo .slide__photo--empty {
+    aspect-ratio: 3/4;
+}
+
 /* ===== SOLO LAYOUT (one 4:3 landscape) ===== */
 
 .slide--solo .slide__photo--wide {

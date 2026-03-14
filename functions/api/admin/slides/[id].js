@@ -21,9 +21,9 @@ export async function onRequestPut(context) {
 
     // Validate roles match layout
     if (layout === 'duo') {
-        const roles = images.map(i => i.role).sort();
-        if (roles.length !== 2 || roles[0] !== 'left' || roles[1] !== 'right') {
-            return Response.json({ error: 'Duo layout requires left and right images' }, { status: 400 });
+        const validRoles = images.every(i => i.role === 'left' || i.role === 'right');
+        if (!validRoles || images.length > 2) {
+            return Response.json({ error: 'Duo layout requires left and/or right images' }, { status: 400 });
         }
     } else {
         if (images.length !== 1 || images[0].role !== 'wide') {

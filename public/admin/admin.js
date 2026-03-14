@@ -355,20 +355,24 @@
         const images = [];
 
         if (currentLayout === 'duo') {
-            if (!selectedImages.left || !selectedImages.right) {
-                showToast('Select both images for a duo slide.');
+            if (!selectedImages.left && !selectedImages.right) {
+                showToast('Select at least one image for a duo slide.');
                 return;
             }
-            images.push({
-                role: 'left',
-                image_id: selectedImages.left.id,
-                caption: document.querySelector('.caption-input[data-role="left"]').value
-            });
-            images.push({
-                role: 'right',
-                image_id: selectedImages.right.id,
-                caption: document.querySelector('.caption-input[data-role="right"]').value
-            });
+            if (selectedImages.left) {
+                images.push({
+                    role: 'left',
+                    image_id: selectedImages.left.id,
+                    caption: document.querySelector('.caption-input[data-role="left"]').value
+                });
+            }
+            if (selectedImages.right) {
+                images.push({
+                    role: 'right',
+                    image_id: selectedImages.right.id,
+                    caption: document.querySelector('.caption-input[data-role="right"]').value
+                });
+            }
         } else {
             if (!selectedImages.wide) {
                 showToast('Select an image for the solo slide.');
