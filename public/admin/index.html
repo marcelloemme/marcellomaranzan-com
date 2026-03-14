@@ -23,51 +23,66 @@
             <div id="slides-list" class="slides-list"></div>
         </div>
 
-        <!-- Middle: slide editor -->
-        <div class="editor-panel">
-            <div class="editor-panel__header">
-                <h2 id="editor-title">New slide</h2>
-            </div>
+        <!-- Middle: slide editor + options -->
+        <div class="middle-column">
+            <div class="editor-panel">
+                <div class="panel-header">
+                    <h2 id="editor-title">New slide</h2>
+                </div>
 
-            <div class="form-group">
-                <label>Layout</label>
-                <div class="layout-picker">
-                    <button class="layout-btn layout-btn--active" data-layout="duo">
-                        <span class="layout-icon">&#9634;&#9634;</span> Duo
-                    </button>
-                    <button class="layout-btn" data-layout="solo">
-                        <span class="layout-icon">&#9634;</span> Solo
-                    </button>
+                <div class="form-group">
+                    <label class="form-label">Layout</label>
+                    <div class="layout-picker">
+                        <button class="layout-btn layout-btn--active" data-layout="duo">
+                            <span class="layout-icon">&#9634;&#9634;</span> Duo
+                        </button>
+                        <button class="layout-btn" data-layout="solo">
+                            <span class="layout-icon">&#9634;</span> Solo
+                        </button>
+                    </div>
+                </div>
+
+                <div id="slot-duo" class="image-slots">
+                    <div class="image-slot" data-role="left">
+                        <div class="image-slot__preview" id="preview-left">Drop image here</div>
+                        <input type="text" class="caption-input" data-role="left" placeholder="Caption left">
+                    </div>
+                    <div class="image-slot" data-role="right">
+                        <div class="image-slot__preview" id="preview-right">Drop image here</div>
+                        <input type="text" class="caption-input" data-role="right" placeholder="Caption right">
+                    </div>
+                </div>
+
+                <div id="slot-solo" class="image-slots" style="display:none;">
+                    <div class="image-slot" data-role="wide">
+                        <div class="image-slot__preview" id="preview-wide">Drop image here</div>
+                        <input type="text" class="caption-input" data-role="wide" placeholder="Caption">
+                    </div>
+                </div>
+
+                <div class="editor-panel__actions">
+                    <button id="btn-save-slide" class="btn btn--primary">Create slide</button>
+                    <button id="btn-cancel-edit" class="btn" style="display:none;">Cancel edit</button>
                 </div>
             </div>
 
-            <div id="slot-duo" class="image-slots">
-                <div class="image-slot" data-role="left">
-                    <div class="image-slot__preview" id="preview-left">Drop image here</div>
-                    <input type="text" class="caption-input" data-role="left" placeholder="Caption left">
+            <div class="options-panel">
+                <div class="panel-header">
+                    <h2>Options</h2>
                 </div>
-                <div class="image-slot" data-role="right">
-                    <div class="image-slot__preview" id="preview-right">Drop image here</div>
-                    <input type="text" class="caption-input" data-role="right" placeholder="Caption right">
+                <div class="option-row">
+                    <span class="option-row__label">Random slide order</span>
+                    <label class="toggle" id="shuffle-toggle">
+                        <input type="checkbox" id="shuffle-check">
+                        <span class="toggle__track"></span>
+                    </label>
                 </div>
-            </div>
-
-            <div id="slot-solo" class="image-slots" style="display:none;">
-                <div class="image-slot" data-role="wide">
-                    <div class="image-slot__preview" id="preview-wide">Drop image here</div>
-                    <input type="text" class="caption-input" data-role="wide" placeholder="Caption">
-                </div>
-            </div>
-
-            <div class="editor-panel__actions">
-                <button id="btn-save-slide" class="btn btn--primary">Create slide</button>
-                <button id="btn-cancel-edit" class="btn" style="display:none;">Cancel edit</button>
             </div>
         </div>
 
         <!-- Right: image browser -->
         <div class="browser-panel">
-            <div class="browser-panel__header">
+            <div class="panel-header">
                 <h2>Images</h2>
             </div>
             <div id="browser-grid" class="browser-grid"></div>

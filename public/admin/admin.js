@@ -1103,11 +1103,6 @@
     }
 
     // ===== SHUFFLE TOGGLE =====
-    const shuffleLabel = document.createElement('label');
-    shuffleLabel.className = 'shuffle-toggle';
-    shuffleLabel.innerHTML = '<input type="checkbox" id="shuffle-check"> Random slide order';
-    slidesList.parentNode.insertBefore(shuffleLabel, slidesList);
-
     const shuffleCheck = document.getElementById('shuffle-check');
 
     shuffleCheck.addEventListener('change', async () => {
