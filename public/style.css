@@ -94,6 +94,7 @@ img {
     position: absolute;
     top: 0;
     left: 0;
+    width: 100%;
     height: 100%;
     align-items: flex-start;
 }
@@ -131,10 +132,7 @@ img {
 
 .slide--duo .slide__photo--landscape img {
     width: 100%;
-    min-width: 100%;
-    height: auto;
     max-height: none;
-    max-width: none;
 }
 
 .slide--duo .slide__photo--empty {
