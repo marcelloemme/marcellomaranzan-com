@@ -420,7 +420,66 @@
     const btnSelectMode = document.getElementById('btn-select-mode');
     const btnDeleteSelected = document.getElementById('btn-delete-selected');
     const btnMoveSelected = document.getElementById('btn-move-selected');
+    const btnNewFolder = document.getElementById('btn-new-folder');
     const selectCount = document.getElementById('select-count');
+
+    btnNewFolder.addEventListener('click', () => {
+        // Find or create folders row
+        let foldersRow = imagesGrid.querySelector('.folders-row');
+        if (!foldersRow) {
+            foldersRow = document.createElement('div');
+            foldersRow.className = 'folders-row';
+            const breadcrumb = imagesGrid.querySelector('.breadcrumb');
+            if (breadcrumb) {
+                breadcrumb.after(foldersRow);
+            } else {
+                imagesGrid.prepend(foldersRow);
+            }
+        }
+
+        // Check if there's already an input open
+        if (foldersRow.querySelector('.folder-card--new')) return;
+
+        const newCard = document.createElement('div');
+        newCard.className = 'folder-card folder-card--new';
+        newCard.innerHTML = '<span class="folder-card__icon">&#128193;</span>';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'folder-card__rename-input';
+        input.placeholder = 'Folder name';
+        newCard.appendChild(input);
+        foldersRow.appendChild(newCard);
+        input.focus();
+
+        let done = false;
+        const doCreate = async () => {
+            if (done) return;
+            done = true;
+            const name = input.value.trim();
+            if (!name) {
+                newCard.remove();
+                return;
+            }
+            try {
+                await api('/api/admin/folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, parent_id: currentFolderId })
+                });
+                showToast('Folder created.');
+                await loadLibrary();
+            } catch (err) {
+                showToast('Error: ' + err.message);
+                newCard.remove();
+            }
+        };
+
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); doCreate(); }
+            if (ev.key === 'Escape') { done = true; newCard.remove(); }
+        });
+        input.addEventListener('blur', doCreate);
+    });
 
     async function loadLibrary() {
         const folderParam = currentFolderId || 'root';
@@ -712,49 +771,6 @@
 
                 foldersRow.appendChild(card);
             });
-
-            // New folder button (not in selection mode)
-            if (!selectionMode) {
-                const newFolderCard = document.createElement('div');
-                newFolderCard.className = 'folder-card folder-card--new';
-                newFolderCard.innerHTML = '<span class="folder-card__icon">+</span><span class="folder-card__name">New folder</span>';
-                newFolderCard.addEventListener('click', async () => {
-                    const nameEl = newFolderCard.querySelector('.folder-card__name');
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.className = 'folder-card__rename-input';
-                    input.placeholder = 'Folder name';
-                    nameEl.replaceWith(input);
-                    input.focus();
-
-                    const doCreate = async () => {
-                        const name = input.value.trim();
-                        if (!name) {
-                            await loadLibrary(); // re-render to reset
-                            return;
-                        }
-                        try {
-                            await api('/api/admin/folders', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ name, parent_id: currentFolderId })
-                            });
-                            showToast('Folder created.');
-                            await loadLibrary();
-                        } catch (err) {
-                            showToast('Error: ' + err.message);
-                            await loadLibrary();
-                        }
-                    };
-
-                    input.addEventListener('keydown', (ev) => {
-                        if (ev.key === 'Enter') doCreate();
-                        if (ev.key === 'Escape') loadLibrary();
-                    });
-                    input.addEventListener('blur', doCreate);
-                });
-                foldersRow.appendChild(newFolderCard);
-            }
 
             if (foldersRow.children.length > 0) {
                 imagesGrid.appendChild(foldersRow);
