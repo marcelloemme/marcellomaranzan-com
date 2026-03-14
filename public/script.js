@@ -355,14 +355,36 @@
     // ===== CONSTRAINED SHUFFLE =====
 
     /**
-     * Shuffle an array so that no layout repeats 3+ times in a row.
-     * prevLayout is the layout of the fixed first slide (checked against arr[0]).
+     * Get a caption key for a slide — sorted captions joined.
+     * Two slides with the same captions (same project) share the same key.
+     * Slides with no captions get a unique key so they never match.
      */
-    function constrainedShuffle(arr, prevLayout) {
+    let _captionUid = 0;
+    function captionKey(slide) {
+        const captions = slide.images
+            .map(function(img) { return (img.caption || '').trim(); })
+            .filter(Boolean)
+            .sort();
+        if (captions.length === 0) return '__empty_' + (++_captionUid);
+        return captions.join('|||');
+    }
+
+    /**
+     * Shuffle an array so that:
+     *   1. No layout repeats 3+ times in a row
+     *   2. No two adjacent slides share the same captions (same project)
+     * The carousel is cyclic: last slide wraps to arr[0] (which follows the
+     * fixed first slide). firstSlide is the fixed slide at position 0.
+     */
+    function constrainedShuffle(arr, firstSlide) {
+        var prevLayout = firstSlide.layout;
+        var firstCaptionKey = captionKey(firstSlide);
+
         function isValid(a) {
-            let prev = prevLayout;
-            let run = 1;
-            for (let i = 0; i < a.length; i++) {
+            // Check layout runs
+            var prev = prevLayout;
+            var run = 1;
+            for (var i = 0; i < a.length; i++) {
                 if (a[i].layout === prev) {
                     run++;
                     if (run >= 3) return false;
@@ -371,39 +393,55 @@
                     run = 1;
                 }
             }
+
+            // Check caption adjacency
+            // First shuffled slide is adjacent to the fixed first slide
+            if (a.length > 0 && a[0]._ck === firstCaptionKey) return false;
+            for (var i = 1; i < a.length; i++) {
+                if (a[i]._ck === a[i - 1]._ck) return false;
+            }
+            // Cyclic: last is adjacent to first shuffled (which follows fixed slide)
+            // Already checked a[0] vs firstSlide above.
+            // Check last vs first of shuffled array (they wrap in carousel)
+            if (a.length > 1 && a[a.length - 1]._ck === a[0]._ck) return false;
+
             return true;
         }
 
         function fisherYates(a) {
-            for (let i = a.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+            for (var i = a.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1));
+                var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
             }
             return a;
         }
 
-        // Try up to 50 random shuffles
-        let result = arr.slice();
-        for (let attempt = 0; attempt < 50; attempt++) {
+        // Pre-compute caption keys
+        for (var i = 0; i < arr.length; i++) {
+            arr[i]._ck = captionKey(arr[i]);
+        }
+
+        // Try up to 100 random shuffles
+        var result = arr.slice();
+        for (var attempt = 0; attempt < 100; attempt++) {
             fisherYates(result);
             if (isValid(result)) return result;
         }
 
         // Fallback: fix violations by swapping
-        let prev = prevLayout;
-        let run = 1;
-        for (let i = 0; i < result.length; i++) {
+        // First pass: fix layout runs
+        var prev = prevLayout;
+        var run = 1;
+        for (var i = 0; i < result.length; i++) {
             if (result[i].layout === prev) {
                 run++;
                 if (run >= 3) {
-                    // Find nearest different-layout slide to swap with
-                    for (let j = i + 1; j < result.length; j++) {
+                    for (var j = i + 1; j < result.length; j++) {
                         if (result[j].layout !== prev) {
-                            const tmp = result[i]; result[i] = result[j]; result[j] = tmp;
+                            var tmp = result[i]; result[i] = result[j]; result[j] = tmp;
                             break;
                         }
                     }
-                    // Reset run tracking from swap point
                     if (result[i].layout !== prev) {
                         prev = result[i].layout;
                         run = 1;
@@ -412,6 +450,23 @@
             } else {
                 prev = result[i].layout;
                 run = 1;
+            }
+        }
+
+        // Second pass: fix caption adjacency
+        for (var i = 0; i < result.length; i++) {
+            var prevCk = i === 0 ? firstCaptionKey : result[i - 1]._ck;
+            if (result[i]._ck === prevCk) {
+                // Find nearest slide with different caption to swap
+                for (var j = i + 1; j < result.length; j++) {
+                    var jPrevCk = i === 0 ? firstCaptionKey : result[i - 1]._ck;
+                    var jNextCk = j + 1 < result.length ? result[j + 1]._ck : result[0]._ck;
+                    // Safe to swap if j's caption differs from i's neighbors
+                    if (result[j]._ck !== prevCk && result[i]._ck !== jNextCk) {
+                        var tmp = result[i]; result[i] = result[j]; result[j] = tmp;
+                        break;
+                    }
+                }
             }
         }
 
@@ -472,7 +527,7 @@
             // Shuffle slides if enabled (keep first slide fixed)
             if (data.shuffle && data.slides.length > 1) {
                 const first = data.slides[0];
-                const rest = constrainedShuffle(data.slides.slice(1), first.layout);
+                const rest = constrainedShuffle(data.slides.slice(1), first);
                 data.slides = [first, ...rest];
             }
 
