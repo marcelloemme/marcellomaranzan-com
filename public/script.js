@@ -399,6 +399,42 @@
         return result;
     }
 
+    // ===== INTRO SLIDE (click-anywhere, then remove) =====
+
+    function bindIntroClick() {
+        if (slides.length < 2) return;
+
+        function handleIntroClick(e) {
+            // Ignore clicks on info links
+            if (e.target.closest('#info a')) return;
+
+            // Only act while on the intro slide (index 0)
+            if (currentIndex !== 0) return;
+
+            // Advance to slide 1 (which will become 0 after removal)
+            slides[0].classList.remove('active');
+            slides[1].classList.add('active');
+
+            // Remove intro slide from DOM and rebuild slides array
+            slides[0].remove();
+            slides = slideshow.querySelectorAll('.slide');
+            currentIndex = 0;
+
+            // Re-index remaining slides
+            slides.forEach((s, i) => { s.dataset.index = i; });
+
+            // Rebuild prefetch queue from new position
+            queueGeneration++;
+            buildQueue(0);
+            processQueue();
+
+            // Remove this listener — intro is gone
+            document.removeEventListener('click', handleIntroClick);
+        }
+
+        document.addEventListener('click', handleIntroClick);
+    }
+
     // ===== INIT =====
 
     async function init() {
@@ -427,6 +463,7 @@
             currentIndex = 0;
 
             bindNavigation();
+            bindIntroClick();
 
             // Load first slide half-res → layout → start full queue
             loadFirstSlide(() => {
