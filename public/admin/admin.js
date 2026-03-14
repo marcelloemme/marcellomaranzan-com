@@ -8,6 +8,9 @@
     let selectedImages = { left: null, right: null, wide: null };
     let activeSlot = null;
     let editingSlideId = null;
+    let selectionMode = false;
+    let selectedLibraryIds = new Set();
+    let lastClickedIndex = -1;
 
     // ===== DOM REFS =====
     const slidesList = document.getElementById('slides-list');
@@ -410,11 +413,88 @@
     });
 
     // ===== IMAGE LIBRARY =====
+    const btnSelectMode = document.getElementById('btn-select-mode');
+    const btnDeleteSelected = document.getElementById('btn-delete-selected');
+    const selectCount = document.getElementById('select-count');
+
     async function loadLibrary() {
         const data = await api('/api/admin/images');
         libraryData = data.images;
         renderLibrary();
     }
+
+    function exitSelectionMode() {
+        selectionMode = false;
+        selectedLibraryIds.clear();
+        lastClickedIndex = -1;
+        btnSelectMode.textContent = 'Select';
+        btnSelectMode.classList.remove('btn--primary');
+        btnDeleteSelected.style.display = 'none';
+        selectCount.style.display = 'none';
+        renderLibrary();
+    }
+
+    function updateSelectionUI() {
+        const n = selectedLibraryIds.size;
+        if (n > 0) {
+            btnDeleteSelected.style.display = '';
+            selectCount.style.display = '';
+            selectCount.textContent = n + ' selected';
+        } else {
+            btnDeleteSelected.style.display = 'none';
+            selectCount.style.display = 'none';
+        }
+    }
+
+    btnSelectMode.addEventListener('click', () => {
+        if (selectionMode) {
+            exitSelectionMode();
+        } else {
+            selectionMode = true;
+            btnSelectMode.textContent = 'Cancel';
+            btnSelectMode.classList.add('btn--primary');
+            renderLibrary();
+        }
+    });
+
+    btnDeleteSelected.addEventListener('click', () => {
+        if (selectedLibraryIds.size === 0) return;
+
+        // Check if already armed (confirm step)
+        if (btnDeleteSelected.dataset.armed) {
+            const ids = [...selectedLibraryIds];
+            btnDeleteSelected.textContent = 'Deleting...';
+            btnDeleteSelected.disabled = true;
+
+            Promise.all(ids.map(id => api('/api/admin/images/' + id, { method: 'DELETE' }).catch(() => null)))
+                .then(() => {
+                    showToast(ids.length + ' image' + (ids.length > 1 ? 's' : '') + ' deleted.');
+                    exitSelectionMode();
+                    return loadLibrary();
+                })
+                .catch(err => {
+                    showToast('Error: ' + err.message);
+                })
+                .finally(() => {
+                    delete btnDeleteSelected.dataset.armed;
+                    btnDeleteSelected.textContent = 'Delete selected';
+                    btnDeleteSelected.disabled = false;
+                });
+        } else {
+            // First click: arm
+            btnDeleteSelected.dataset.armed = '1';
+            btnDeleteSelected.textContent = 'Confirm delete (' + selectedLibraryIds.size + ')';
+            btnDeleteSelected.classList.add('btn-delete-selected--armed');
+
+            setTimeout(() => {
+                if (btnDeleteSelected.dataset.armed) {
+                    delete btnDeleteSelected.dataset.armed;
+                    btnDeleteSelected.textContent = 'Delete selected';
+                    btnDeleteSelected.classList.remove('btn-delete-selected--armed');
+                }
+            }, 4000);
+        }
+    });
 
     function renderLibrary() {
         if (libraryData.length === 0) {
@@ -425,50 +505,77 @@
         const sorted = [...libraryData].sort((a, b) => a.filename.localeCompare(b.filename));
 
         imagesGrid.innerHTML = '';
-        sorted.forEach(img => {
+        sorted.forEach((img, index) => {
             const card = document.createElement('div');
-            card.className = 'image-card';
+            const isSelected = selectedLibraryIds.has(img.id);
+            card.className = 'image-card' + (isSelected ? ' image-card--selected' : '') + (selectionMode ? ' image-card--selectable' : '');
+            card.dataset.index = index;
+
             card.innerHTML =
                 '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">' +
+                (selectionMode ? '<div class="image-card__check">' + (isSelected ? '&#10003;' : '') + '</div>' : '') +
                 '<div class="image-card__info">' +
                     '<span class="filename">' + escHtml(img.filename) + '</span>' +
                     img.width + '&times;' + img.height + ' &middot; ' + formatSize(img.size_bytes) +
                 '</div>' +
-                '<button class="image-card__delete">&times;</button>';
+                (selectionMode ? '' : '<button class="image-card__delete">&times;</button>');
 
-            // Same two-click pattern for library delete
-            const delBtn = card.querySelector('.image-card__delete');
-            delBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-
-                if (delBtn.dataset.armed) {
-                    delBtn.textContent = '...';
-                    delBtn.disabled = true;
-                    api('/api/admin/images/' + img.id, { method: 'DELETE' })
-                        .then(() => loadLibrary())
-                        .catch(err => {
-                            showToast(err.message);
-                            delBtn.textContent = '\u00d7';
-                            delBtn.disabled = false;
-                            delete delBtn.dataset.armed;
-                        });
-                } else {
-                    delBtn.dataset.armed = '1';
-                    delBtn.textContent = 'delete?';
-                    delBtn.style.width = 'auto';
-                    delBtn.style.borderRadius = '4px';
-                    delBtn.style.padding = '2px 8px';
-                    delBtn.style.display = 'flex';
-
-                    setTimeout(() => {
-                        if (delBtn.dataset.armed) {
-                            delete delBtn.dataset.armed;
-                            delBtn.textContent = '\u00d7';
-                            delBtn.removeAttribute('style');
+            if (selectionMode) {
+                card.addEventListener('click', (e) => {
+                    if (e.shiftKey && lastClickedIndex >= 0) {
+                        // Shift+click: select range
+                        const from = Math.min(lastClickedIndex, index);
+                        const to = Math.max(lastClickedIndex, index);
+                        for (let i = from; i <= to; i++) {
+                            selectedLibraryIds.add(sorted[i].id);
                         }
-                    }, 3000);
-                }
-            });
+                    } else {
+                        // Normal click: toggle
+                        if (selectedLibraryIds.has(img.id)) {
+                            selectedLibraryIds.delete(img.id);
+                        } else {
+                            selectedLibraryIds.add(img.id);
+                        }
+                    }
+                    lastClickedIndex = index;
+                    updateSelectionUI();
+                    renderLibrary();
+                });
+            } else {
+                // Normal mode: single delete
+                const delBtn = card.querySelector('.image-card__delete');
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+
+                    if (delBtn.dataset.armed) {
+                        delBtn.textContent = '...';
+                        delBtn.disabled = true;
+                        api('/api/admin/images/' + img.id, { method: 'DELETE' })
+                            .then(() => loadLibrary())
+                            .catch(err => {
+                                showToast(err.message);
+                                delBtn.textContent = '\u00d7';
+                                delBtn.disabled = false;
+                                delete delBtn.dataset.armed;
+                            });
+                    } else {
+                        delBtn.dataset.armed = '1';
+                        delBtn.textContent = 'delete?';
+                        delBtn.style.width = 'auto';
+                        delBtn.style.borderRadius = '4px';
+                        delBtn.style.padding = '2px 8px';
+                        delBtn.style.display = 'flex';
+
+                        setTimeout(() => {
+                            if (delBtn.dataset.armed) {
+                                delete delBtn.dataset.armed;
+                                delBtn.textContent = '\u00d7';
+                                delBtn.removeAttribute('style');
+                            }
+                        }, 3000);
+                    }
+                });
+            }
 
             imagesGrid.appendChild(card);
         });

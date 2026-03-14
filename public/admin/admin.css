@@ -431,3 +431,50 @@ body {
 .btn-delete-slide--armed:hover {
     background: #b22;
 }
+
+/* ===== BULK SELECT MODE ===== */
+.image-card--selectable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.image-card--selected {
+    outline: 3px solid #333;
+    outline-offset: -3px;
+}
+
+.image-card--selected img {
+    opacity: 0.7;
+}
+
+.image-card__check {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: rgba(0,0,0,0.3);
+    color: #fff;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.image-card--selected .image-card__check {
+    background: #333;
+    border-color: #333;
+}
+
+.btn-delete-selected--armed {
+    background: #d32 !important;
+    color: #fff !important;
+    border-color: #d32 !important;
+}
+.btn-delete-selected--armed:hover {
+    background: #b22 !important;
+}
