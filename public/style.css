@@ -118,17 +118,15 @@ img {
 
 .slide--duo .slide__photo {
     width: calc(50% - var(--gap) / 2);
-    height: var(--photo-h);
     overflow: visible;
     flex-shrink: 0;
 }
 
 .slide--duo .slide__photo img {
-    height: 100%;
-    width: auto;
+    max-height: var(--photo-h);
     max-width: 100%;
-    object-fit: contain;
-    object-position: top;
+    width: auto;
+    height: auto;
 }
 
 .slide--duo .slide__photo--empty {
