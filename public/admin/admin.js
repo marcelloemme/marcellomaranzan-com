@@ -512,9 +512,30 @@
         await loadLibrary();
     });
 
+    function getImageDims(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            };
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
     async function uploadImage(file) {
+        const dims = await getImageDims(file);
+        const shortSide = Math.min(dims.width, dims.height);
+
+        // Skip recompression for already-optimized images (short side <= 1800)
+        const fullPromise = shortSide <= 1800
+            ? Promise.resolve({ blob: file, width: dims.width, height: dims.height })
+            : resizeImage(file, 1600, 0.80);
+
         const [full, half] = await Promise.all([
-            resizeImage(file, 1600, 0.80),
+            fullPromise,
             resizeImage(file, 800, 0.80)
         ]);
 
