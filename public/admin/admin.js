@@ -1015,6 +1015,15 @@
         document.getElementById('file-input').click();
     });
 
+    function updateUploadProgress(fileIndex, totalFiles, percent, phase) {
+        const prefix = totalFiles > 1 ? '(' + (fileIndex + 1) + '/' + totalFiles + ') ' : '';
+        if (phase === 'processing') {
+            uploadStatus.textContent = prefix + 'Processing...';
+        } else {
+            uploadStatus.textContent = prefix + 'Uploading ' + percent + '%';
+        }
+    }
+
     document.getElementById('file-input').addEventListener('change', async (e) => {
         const files = [...e.target.files];
         if (files.length === 0) return;
@@ -1024,12 +1033,13 @@
 
         for (let i = 0; i < files.length; i++) {
             const isPdf = files[i].type === 'application/pdf' || files[i].name.toLowerCase().endsWith('.pdf');
-            uploadStatus.textContent = (isPdf ? 'Processing PDF ' : 'Uploading ') + (i + 1) + '/' + files.length + '...';
+            const onProgress = (pct) => updateUploadProgress(i, files.length, pct);
+            updateUploadProgress(i, files.length, 0, 'processing');
             try {
                 if (isPdf) {
-                    await uploadPdf(files[i]);
+                    await uploadPdf(files[i], onProgress);
                 } else {
-                    await uploadImage(files[i]);
+                    await uploadImage(files[i], onProgress);
                 }
                 successes++;
             } catch (err) {
@@ -1067,19 +1077,39 @@
     }
 
     // === 2-step upload: PUT file directly to R2, then commit metadata ===
-    async function directUpload(r2Key, blob, contentType) {
-        const res = await fetch('/api/admin/upload/' + r2Key, {
-            method: 'PUT',
-            body: blob,
-            headers: { 'Content-Type': contentType }
+    function directUpload(r2Key, blob, contentType, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', '/api/admin/upload/' + r2Key);
+            xhr.setRequestHeader('Content-Type', contentType);
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable && onProgress) {
+                    onProgress(Math.round(e.loaded / e.total * 100));
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                } else {
+                    try {
+                        const err = JSON.parse(xhr.responseText);
+                        reject(new Error(err.error || 'Upload failed'));
+                    } catch {
+                        reject(new Error('Upload failed: ' + xhr.statusText));
+                    }
+                }
+            });
+
+            xhr.addEventListener('error', () => reject(new Error('Network error')));
+            xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+            xhr.send(blob);
         });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: res.statusText }));
-            throw new Error(err.error || 'Upload failed');
-        }
     }
 
-    async function uploadImage(file) {
+    async function uploadImage(file, onProgress) {
         const dims = await getImageDims(file);
         const shortSide = Math.min(dims.width, dims.height);
 
@@ -1099,7 +1129,7 @@
         const { r2_key } = await api('/api/admin/images', { method: 'POST', body: prepForm });
 
         // Step 2: upload full image directly to R2
-        await directUpload(r2_key, full.blob, 'image/jpeg');
+        await directUpload(r2_key, full.blob, 'image/jpeg', onProgress);
 
         // Step 3: commit metadata + thumbnail
         const commitForm = new FormData();
@@ -1157,7 +1187,7 @@
         return { blob, width: canvas.width, height: canvas.height };
     }
 
-    async function uploadPdf(file) {
+    async function uploadPdf(file, onProgress) {
         // Step 1: generate thumbnail client-side
         const thumb = await generatePdfThumbnail(file);
 
@@ -1168,7 +1198,7 @@
         const { r2_key } = await api('/api/admin/images', { method: 'POST', body: prepForm });
 
         // Step 3: upload PDF directly to R2 (no Worker body limit)
-        await directUpload(r2_key, file, 'application/pdf');
+        await directUpload(r2_key, file, 'application/pdf', onProgress);
 
         // Step 4: commit metadata + thumbnail
         const commitForm = new FormData();
