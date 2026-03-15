@@ -1019,26 +1019,38 @@
         const files = [...e.target.files];
         if (files.length === 0) return;
 
+        let successes = 0;
+        let errors = [];
+
         for (let i = 0; i < files.length; i++) {
-            uploadStatus.textContent = 'Uploading ' + (i + 1) + '/' + files.length + '...';
+            const isPdf = files[i].type === 'application/pdf' || files[i].name.toLowerCase().endsWith('.pdf');
+            uploadStatus.textContent = (isPdf ? 'Processing PDF ' : 'Uploading ') + (i + 1) + '/' + files.length + '...';
             try {
-                const isPdf = files[i].type === 'application/pdf' || files[i].name.toLowerCase().endsWith('.pdf');
                 if (isPdf) {
                     await uploadPdf(files[i]);
                 } else {
                     await uploadImage(files[i]);
                 }
+                successes++;
             } catch (err) {
-                showToast('Error uploading ' + files[i].name + ': ' + err.message);
+                console.error('Upload error for ' + files[i].name + ':', err);
+                errors.push(files[i].name + ': ' + err.message);
             }
         }
 
         uploadStatus.textContent = '';
-        showToast(files.length + ' file' + (files.length > 1 ? 's' : '') + ' uploaded.');
+
+        if (errors.length > 0) {
+            showToast('Errors: ' + errors.join('; '));
+        } else {
+            showToast(successes + ' file' + (successes > 1 ? 's' : '') + ' uploaded.');
+        }
 
         e.target.value = '';
-        await loadLibrary();
-        await loadBrowser();
+        if (successes > 0) {
+            await loadLibrary();
+            await loadBrowser();
+        }
     });
 
     function getImageDims(file) {
@@ -1124,11 +1136,13 @@
     }
 
     async function uploadPdf(file) {
+        console.log('PDF upload: generating thumbnail for', file.name, '(' + (file.size / 1024 / 1024).toFixed(1) + ' MB)');
         const thumb = await generatePdfThumbnail(file);
+        console.log('PDF upload: thumbnail generated', thumb.width + 'x' + thumb.height);
 
         const formData = new FormData();
         formData.append('image', file, file.name);
-        formData.append('image_half', thumb.blob, file.name.replace('.pdf', '_thumb.jpg'));
+        formData.append('image_half', thumb.blob, file.name.replace(/\.pdf$/i, '_thumb.jpg'));
         formData.append('width', thumb.width);
         formData.append('height', thumb.height);
         formData.append('filename', file.name);
@@ -1137,7 +1151,9 @@
             formData.append('folder_id', currentFolderId);
         }
 
+        console.log('PDF upload: sending to server...');
         await api('/api/admin/images', { method: 'POST', body: formData });
+        console.log('PDF upload: done');
     }
 
     function resizeImage(file, shortSide, quality) {
