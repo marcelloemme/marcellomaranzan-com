@@ -90,11 +90,10 @@
             return [...slides[i].querySelectorAll('img[data-src-full]')];
         }
 
-        // 1. Current slide: half → full
+        // 1. Current slide: half only (full is handled by loadFullForSlide)
         for (const img of imgsForSlide(centerIndex)) {
             const st = getState(img);
             if (st === 'none') loadQueue.push({ img, res: 'half' });
-            if (st !== 'full') loadQueue.push({ img, res: 'full' });
         }
 
         // 2. Alternating bands
@@ -183,6 +182,38 @@
 
     // ===== NAVIGATION =====
 
+    /**
+     * Load full-res for a slide immediately, outside the queue.
+     * This ensures the current slide always gets its full-res
+     * regardless of navigation / queue generation changes.
+     */
+    function loadFullForSlide(slideIndex) {
+        const imgs = [...slides[slideIndex].querySelectorAll('img[data-src-full]')];
+        imgs.forEach(img => {
+            if (getState(img) === 'full') return;
+
+            // First ensure half is shown
+            if (getState(img) === 'none' && img.dataset.srcHalf) {
+                img.src = img.dataset.srcHalf;
+                imgState.set(img, 'half');
+            }
+
+            // Then load full independently
+            const fullUrl = img.dataset.srcFull;
+            if (!fullUrl) return;
+
+            const loader = new Image();
+            loader.onload = () => {
+                // Only upgrade, never downgrade
+                if (getState(img) !== 'full') {
+                    img.src = fullUrl;
+                    imgState.set(img, 'full');
+                }
+            };
+            loader.src = fullUrl;
+        });
+    }
+
     function goTo(index) {
         if (index < 0 || index >= slides.length || index === currentIndex) return;
 
@@ -202,7 +233,10 @@
             currentIndex = index;
         }
 
-        // Rebuild queue from new position
+        // Immediately load full-res for current slide (not cancellable)
+        loadFullForSlide(currentIndex);
+
+        // Rebuild queue from new position (for surrounding slides)
         queueGeneration++;
         buildQueue(currentIndex);
         processQueue();
