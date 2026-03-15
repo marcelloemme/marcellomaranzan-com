@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS images (
     width       INTEGER NOT NULL,
     height      INTEGER NOT NULL,
     size_bytes  INTEGER NOT NULL,
+    file_type   TEXT NOT NULL DEFAULT 'image',
     folder_id   TEXT REFERENCES folders(id) ON DELETE SET NULL,
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

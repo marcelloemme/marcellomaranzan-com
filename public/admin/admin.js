@@ -438,9 +438,11 @@
             if (selectedImages[role]) slotImageIds.add(selectedImages[role].id);
         }
 
-        let sorted = [...images].sort((a, b) => a.filename.localeCompare(b.filename));
+        // Filter out PDFs (can't be used in slides) and optionally used images
+        let sorted = [...images]
+            .filter(img => img.file_type !== 'pdf')
+            .sort((a, b) => a.filename.localeCompare(b.filename));
 
-        // Filter out used images if toggle is on
         if (hideUsedImages) {
             sorted = sorted.filter(img => !usedIds.has(img.id) || editingImageIds.has(img.id));
         }
@@ -744,7 +746,7 @@
 
             Promise.all(ids.map(id => api('/api/admin/images/' + id, { method: 'DELETE' }).catch(() => null)))
                 .then(() => {
-                    showToast(ids.length + ' image' + (ids.length > 1 ? 's' : '') + ' deleted.');
+                    showToast(ids.length + ' file' + (ids.length > 1 ? 's' : '') + ' deleted.');
                     exitSelectionMode();
                     return loadLibrary();
                 })
@@ -906,15 +908,17 @@
         sorted.forEach((img, index) => {
             const card = document.createElement('div');
             const isSelected = selectedLibraryIds.has(img.id);
-            card.className = 'image-card' + (isSelected ? ' image-card--selected' : '') + (selectionMode ? ' image-card--selectable' : '');
+            const isPdf = img.file_type === 'pdf';
+            card.className = 'image-card' + (isSelected ? ' image-card--selected' : '') + (selectionMode ? ' image-card--selectable' : '') + (isPdf ? ' image-card--pdf' : '');
             card.dataset.index = index;
 
             card.innerHTML =
                 '<img src="' + (img.src_half || img.src) + '" onerror="this.onerror=null;this.src=\'' + img.src + '\'" alt="">' +
+                (isPdf ? '<span class="image-card__badge">PDF</span>' : '') +
                 (selectionMode ? '<div class="image-card__check">' + (isSelected ? '&#10003;' : '') + '</div>' : '') +
                 '<div class="image-card__info">' +
                     '<span class="filename">' + escHtml(img.filename) + '</span>' +
-                    img.width + '&times;' + img.height + ' &middot; ' + formatSize(img.size_bytes) +
+                    (isPdf ? formatSize(img.size_bytes) : img.width + '&times;' + img.height + ' &middot; ' + formatSize(img.size_bytes)) +
                 '</div>' +
                 (selectionMode ? '' : '<button class="image-card__link" title="Copy direct link">&#128279;</button><button class="image-card__delete">&times;</button>');
 
@@ -1018,18 +1022,23 @@
         for (let i = 0; i < files.length; i++) {
             uploadStatus.textContent = 'Uploading ' + (i + 1) + '/' + files.length + '...';
             try {
-                await uploadImage(files[i]);
+                const isPdf = files[i].type === 'application/pdf' || files[i].name.toLowerCase().endsWith('.pdf');
+                if (isPdf) {
+                    await uploadPdf(files[i]);
+                } else {
+                    await uploadImage(files[i]);
+                }
             } catch (err) {
                 showToast('Error uploading ' + files[i].name + ': ' + err.message);
             }
         }
 
         uploadStatus.textContent = '';
-        showToast(files.length + ' image' + (files.length > 1 ? 's' : '') + ' uploaded.');
+        showToast(files.length + ' file' + (files.length > 1 ? 's' : '') + ' uploaded.');
 
         e.target.value = '';
         await loadLibrary();
-        await loadBrowser(); // refresh browser panel too
+        await loadBrowser();
     });
 
     function getImageDims(file) {
@@ -1064,6 +1073,66 @@
         formData.append('width', full.width);
         formData.append('height', full.height);
         formData.append('filename', file.name);
+        formData.append('file_type', 'image');
+        if (currentFolderId) {
+            formData.append('folder_id', currentFolderId);
+        }
+
+        await api('/api/admin/images', { method: 'POST', body: formData });
+    }
+
+    // ===== PDF UPLOAD =====
+    let _pdfjsLoaded = false;
+    async function loadPdfJs() {
+        if (_pdfjsLoaded) return;
+        await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        _pdfjsLoaded = true;
+    }
+
+    async function generatePdfThumbnail(file) {
+        await loadPdfJs();
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+
+        // Render at a scale that gives ~800px on the short side
+        const viewport = page.getViewport({ scale: 1 });
+        const shortSide = Math.min(viewport.width, viewport.height);
+        const scale = 800 / shortSide;
+        const scaledViewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(scaledViewport.width);
+        canvas.height = Math.round(scaledViewport.height);
+        const ctx = canvas.getContext('2d');
+
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        return { blob, width: canvas.width, height: canvas.height };
+    }
+
+    async function uploadPdf(file) {
+        const thumb = await generatePdfThumbnail(file);
+
+        const formData = new FormData();
+        formData.append('image', file, file.name);
+        formData.append('image_half', thumb.blob, file.name.replace('.pdf', '_thumb.jpg'));
+        formData.append('width', thumb.width);
+        formData.append('height', thumb.height);
+        formData.append('filename', file.name);
+        formData.append('file_type', 'pdf');
         if (currentFolderId) {
             formData.append('folder_id', currentFolderId);
         }

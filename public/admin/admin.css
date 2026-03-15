@@ -460,6 +460,23 @@ body {
 }
 .image-card:hover .image-card__delete { display: flex; }
 
+/* PDF badge */
+.image-card__badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: #d32f2f;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.03em;
+    line-height: 1.4;
+    z-index: 2;
+    pointer-events: none;
+}
+
 /* ===== FORM ===== */
 .form-group { margin-bottom: 1.25rem; }
 
