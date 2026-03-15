@@ -1066,6 +1066,19 @@
         });
     }
 
+    // === 2-step upload: PUT file directly to R2, then commit metadata ===
+    async function directUpload(r2Key, blob, contentType) {
+        const res = await fetch('/api/admin/upload/' + r2Key, {
+            method: 'PUT',
+            body: blob,
+            headers: { 'Content-Type': contentType }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: res.statusText }));
+            throw new Error(err.error || 'Upload failed');
+        }
+    }
+
     async function uploadImage(file) {
         const dims = await getImageDims(file);
         const shortSide = Math.min(dims.width, dims.height);
@@ -1079,18 +1092,29 @@
             resizeImage(file, 800, 0.87)
         ]);
 
-        const formData = new FormData();
-        formData.append('image', full.blob, file.name);
-        formData.append('image_half', half.blob, file.name);
-        formData.append('width', full.width);
-        formData.append('height', full.height);
-        formData.append('filename', file.name);
-        formData.append('file_type', 'image');
-        if (currentFolderId) {
-            formData.append('folder_id', currentFolderId);
-        }
+        // Step 1: get R2 key
+        const prepForm = new FormData();
+        prepForm.append('action', 'prepare');
+        prepForm.append('file_type', 'image');
+        const { r2_key } = await api('/api/admin/images', { method: 'POST', body: prepForm });
 
-        await api('/api/admin/images', { method: 'POST', body: formData });
+        // Step 2: upload full image directly to R2
+        await directUpload(r2_key, full.blob, 'image/jpeg');
+
+        // Step 3: commit metadata + thumbnail
+        const commitForm = new FormData();
+        commitForm.append('action', 'commit');
+        commitForm.append('r2_key', r2_key);
+        commitForm.append('image_half', half.blob, file.name);
+        commitForm.append('width', full.width);
+        commitForm.append('height', full.height);
+        commitForm.append('size_bytes', full.blob.size);
+        commitForm.append('filename', file.name);
+        commitForm.append('file_type', 'image');
+        if (currentFolderId) {
+            commitForm.append('folder_id', currentFolderId);
+        }
+        await api('/api/admin/images', { method: 'POST', body: commitForm });
     }
 
     // ===== PDF UPLOAD =====
@@ -1114,7 +1138,6 @@
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const page = await pdf.getPage(1);
 
-        // Render at a scale that gives ~800px on the short side
         const viewport = page.getViewport({ scale: 1 });
         const shortSide = Math.min(viewport.width, viewport.height);
         const scale = 800 / shortSide;
@@ -1125,7 +1148,6 @@
         canvas.height = Math.round(scaledViewport.height);
         const ctx = canvas.getContext('2d');
 
-        // White background
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1136,24 +1158,32 @@
     }
 
     async function uploadPdf(file) {
-        console.log('PDF upload: generating thumbnail for', file.name, '(' + (file.size / 1024 / 1024).toFixed(1) + ' MB)');
+        // Step 1: generate thumbnail client-side
         const thumb = await generatePdfThumbnail(file);
-        console.log('PDF upload: thumbnail generated', thumb.width + 'x' + thumb.height);
 
-        const formData = new FormData();
-        formData.append('image', file, file.name);
-        formData.append('image_half', thumb.blob, file.name.replace(/\.pdf$/i, '_thumb.jpg'));
-        formData.append('width', thumb.width);
-        formData.append('height', thumb.height);
-        formData.append('filename', file.name);
-        formData.append('file_type', 'pdf');
+        // Step 2: get R2 key
+        const prepForm = new FormData();
+        prepForm.append('action', 'prepare');
+        prepForm.append('file_type', 'pdf');
+        const { r2_key } = await api('/api/admin/images', { method: 'POST', body: prepForm });
+
+        // Step 3: upload PDF directly to R2 (no Worker body limit)
+        await directUpload(r2_key, file, 'application/pdf');
+
+        // Step 4: commit metadata + thumbnail
+        const commitForm = new FormData();
+        commitForm.append('action', 'commit');
+        commitForm.append('r2_key', r2_key);
+        commitForm.append('image_half', thumb.blob, file.name.replace(/\.pdf$/i, '_thumb.jpg'));
+        commitForm.append('width', thumb.width);
+        commitForm.append('height', thumb.height);
+        commitForm.append('size_bytes', file.size);
+        commitForm.append('filename', file.name);
+        commitForm.append('file_type', 'pdf');
         if (currentFolderId) {
-            formData.append('folder_id', currentFolderId);
+            commitForm.append('folder_id', currentFolderId);
         }
-
-        console.log('PDF upload: sending to server...');
-        await api('/api/admin/images', { method: 'POST', body: formData });
-        console.log('PDF upload: done');
+        await api('/api/admin/images', { method: 'POST', body: commitForm });
     }
 
     function resizeImage(file, shortSide, quality) {
