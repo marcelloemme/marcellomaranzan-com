@@ -155,7 +155,7 @@ img {
 .slide__caption {
     text-align: right;
     margin-top: var(--gap);
-    color: #666;
+    color: #000;
 }
 
 /* ===== NAVIGATION ZONES (click areas) ===== */
