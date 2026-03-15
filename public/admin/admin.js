@@ -1076,37 +1076,100 @@
         });
     }
 
-    // === 2-step upload: PUT file directly to R2, then commit metadata ===
-    function directUpload(r2Key, blob, contentType, onProgress) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', '/api/admin/upload/' + r2Key);
-            xhr.setRequestHeader('Content-Type', contentType);
+    // === Multipart upload to R2 via Worker (75MB chunks) ===
+    const CHUNK_SIZE = 75 * 1024 * 1024; // 75MB
 
-            xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable && onProgress) {
-                    onProgress(Math.round(e.loaded / e.total * 100));
-                }
-            });
+    async function directUpload(r2Key, blob, contentType, onProgress) {
+        const totalSize = blob.size;
 
-            xhr.addEventListener('load', () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve();
-                } else {
-                    try {
-                        const err = JSON.parse(xhr.responseText);
-                        reject(new Error(err.error || 'Upload failed'));
-                    } catch {
-                        reject(new Error('Upload failed: ' + xhr.statusText));
+        // Small files: single PUT (no multipart overhead)
+        if (totalSize <= CHUNK_SIZE) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', '/api/admin/upload/' + r2Key);
+                xhr.setRequestHeader('Content-Type', contentType);
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable && onProgress) {
+                        onProgress(Math.round(e.loaded / e.total * 100));
                     }
-                }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve();
+                    } else {
+                        try {
+                            const err = JSON.parse(xhr.responseText);
+                            reject(new Error(err.error || 'Upload failed'));
+                        } catch {
+                            reject(new Error('Upload failed: ' + xhr.statusText));
+                        }
+                    }
+                });
+
+                xhr.addEventListener('error', () => reject(new Error('Network error')));
+                xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+                xhr.send(blob);
+            });
+        }
+
+        // Large files: R2 multipart upload
+        // Step 1: create multipart upload
+        const initRes = await fetch('/api/admin/upload/' + r2Key, { method: 'POST' });
+        if (!initRes.ok) throw new Error('Failed to init multipart upload');
+        const { uploadId } = await initRes.json();
+
+        // Step 2: upload chunks
+        const parts = [];
+        const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+        let uploadedBytes = 0;
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, totalSize);
+            const chunk = blob.slice(start, end);
+            const partNumber = i + 1;
+
+            const partRes = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', '/api/admin/upload/' + r2Key + '?uploadId=' + uploadId + '&partNumber=' + partNumber);
+                xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable && onProgress) {
+                        const total = uploadedBytes + e.loaded;
+                        onProgress(Math.round(total / totalSize * 100));
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            resolve(JSON.parse(xhr.responseText));
+                        } catch {
+                            reject(new Error('Invalid part response'));
+                        }
+                    } else {
+                        reject(new Error('Part ' + partNumber + ' upload failed'));
+                    }
+                });
+
+                xhr.addEventListener('error', () => reject(new Error('Network error on part ' + partNumber)));
+                xhr.send(chunk);
             });
 
-            xhr.addEventListener('error', () => reject(new Error('Network error')));
-            xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+            parts.push({ partNumber: partRes.partNumber, etag: partRes.etag });
+            uploadedBytes = end;
+        }
 
-            xhr.send(blob);
-        });
+        // Step 3: complete multipart upload
+        const completeRes = await fetch(
+            '/api/admin/upload/' + r2Key + '?uploadId=' + uploadId + '&complete=1',
+            { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parts) }
+        );
+        if (!completeRes.ok) throw new Error('Failed to complete multipart upload');
     }
 
     async function uploadImage(file, onProgress) {
